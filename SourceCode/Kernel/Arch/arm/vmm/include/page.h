@@ -11,6 +11,10 @@
 #define KERNEL_L2PT_NUMBER 64
 #define KERNEL_PTE_NUMBER 512
 
+#define VA_OFFSET 12
+#define KERNEL_PHYSICAL_START 0
+#define PAGE_SIZE 4 * KB
+
 typedef struct PageTableEntry {
   /* These are used in all kinds of entry. */
   uint64_t valid : 1; /* Valid mapping */
@@ -54,13 +58,37 @@ typedef struct Level1PageTable {
   PTE pte[KERNEL_L1PT_NUMBER];
 } L1PT;
 
+typedef enum PhysicalPageType {
+  PAGE_UNKNOWD = 0,
+  PAGE_4K,
+  PAGE_2M,
+} PhysicalPageType;
+
+typedef enum PhysicalPageUsage {
+  USAGE_UNKNOWD = 0,
+  USAGE_KERNEL,
+  USAGE_KERNEL_HEAP,
+  USAGE_USER,
+  USAGE_PERIPHERAL,
+  USAGE_FRAMEBUFFER,
+  USAGE_PAGETABLE,
+} PhysicalPageUsage;
+
 typedef struct PhysicalPage {
   uint64_t ref_count : 8;
-  uint64_t reserved : 24;
+  PhysicalPageType type : 8;
+  PhysicalPageUsage usage : 8;
+  uint64_t reserved : 8;
 } __attribute__((packed)) PhysicalPage;
 
-uint64_t vmm_alloc_page();
+uint64_t page_alloc(PhysicalPageUsage usage);
 
-uint64_t vmm_free_page(uint64_t page);
+uint64_t page_free(uint64_t page);
+
+uint64_t page_alloc_huge(PhysicalPageUsage usage);
+
+uint64_t page_alloc_huge_at(PhysicalPageUsage usage, uint64_t page, uint64_t size);
+
+uint64_t page_free_huge(uint64_t page, uint64_t size);
 
 #endif // __KERNEL_PAGE_H__

@@ -19,6 +19,7 @@ KernelStatus klist_append(ListNode *list, ListNode *node) {
   }
   node->prev = tmp;
   tmp->next = node;
+  return OK;
 }
 
 ListNode *klist_get_head(ListNode *node) {
@@ -30,7 +31,6 @@ ListNode *klist_get_head(ListNode *node) {
 }
 
 ListNode *klist_remove_node(ListNode *node) {
-
   if (node->next == nullptr && node->prev == nullptr) {
     return node;
   }

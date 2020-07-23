@@ -73,7 +73,11 @@ typedef struct CpuContextSave {
 typedef uint32_t (*ThreadStartRoutine)(void *arg);
 
 typedef struct VMMAssociatedSpace {
-
+  uint32_t pageTableAddr;
+  uint32_t codeSectionAddr;
+  uint32_t rodataSectionAddr;
+  uint32_t dataSectionAddr;
+  uint32_t bssSectionAddr;
 } __attribute__((packed)) VMMAssociatedSpace;
 
 typedef struct Thread {
@@ -93,12 +97,13 @@ typedef struct Thread {
   ListNode threadList;
   KQueue threadReadyQueue;
 
-  RBNode *rbTree;
+  uint32_t priority;
 
+  RBNode rbTree;
+  uint64_t startTime;
   uint32_t runtimeNs;
   uint32_t runtimVirtualNs;
 
-  uint32_t priority;
   bool interruptable;
 
   CpuNum lastCpu;
@@ -107,7 +112,6 @@ typedef struct Thread {
   void *arg;
 
   uint32_t returnCode;
-
 } __attribute__((packed)) Thread;
 
 Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uint32_t priority);

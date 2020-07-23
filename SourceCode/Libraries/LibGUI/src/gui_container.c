@@ -8,6 +8,7 @@
 #include <gui_label.h>
 #include <gui_panel.h>
 #include <kvector.h>
+#include <log.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -48,7 +49,7 @@ void gui_container_create(GUIContainer *container) {
 
   container->children = kvector_allocate();
   if (container->children == nullptr) {
-    printf("[GUI]: container create failed, unable to allocate children vector\n");
+    LogError("[GUI]: container create failed, unable to allocate children vector\n");
   }
 }
 

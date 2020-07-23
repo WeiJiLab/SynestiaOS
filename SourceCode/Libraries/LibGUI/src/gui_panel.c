@@ -7,6 +7,7 @@
 #include <gui_container.h>
 #include <gui_label.h>
 #include <gui_panel.h>
+#include <log.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -46,7 +47,7 @@ void gui_panel_create(GUIPanel *panel) {
 
   panel->children = kvector_allocate();
   if (panel->children == nullptr) {
-    printf("[GUI]: panel create failed, unable to allocate children vector\n");
+    LogError("[GUI]: panel create failed, unable to allocate children vector\n");
   }
 }
 

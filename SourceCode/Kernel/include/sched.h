@@ -22,6 +22,16 @@ KernelStatus schd_preempt(void);
 
 KernelStatus schd_switch_to(Thread *thread);
 
+KernelStatus schd_add_to_global_list(Thread *thread);
+
+KernelStatus schd_add_to_cfs_schduler(Thread *root, Thread *node);
+
+KernelStatus schd_add_to_schduler(Thread *thread);
+
+KernelStatus schd_remove_from_schduler(Thread *thread);
+
+KernelStatus schd_switch_next(void);
+
 KernelStatus schd_reschedule(void);
 
 KernelStatus sche_insert_into_percpu_rq(CpuNum cpuNum, Thread *thread);

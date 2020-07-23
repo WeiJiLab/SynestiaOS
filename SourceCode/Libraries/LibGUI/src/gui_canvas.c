@@ -5,6 +5,7 @@
 #include <gfx2d.h>
 #include <gui_canvas.h>
 #include <kheap.h>
+#include <log.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -42,7 +43,7 @@ void gui_canvas_create(GUICanvas *canvas) {
 
   canvas->buffer = kheap_alloc(canvas->component.size.width * canvas->component.size.height * sizeof(uint32_t));
   if (canvas->buffer == nullptr) {
-    printf("[GUI]: canvas create failed, unable to allocate buffer memory\n");
+    LogError("[GUI]: canvas create failed, unable to allocate buffer memory\n");
   }
 }
 

@@ -4,28 +4,11 @@
 
 #include <kheap.h>
 #include <kstack.h>
+#include <log.h>
 #include <stdlib.h>
 #include <thread.h>
 
-void thread_insert_to_rb_tree(RBNode *root, RBNode *node) {
-  uint32_t parentValue = getNode(root, Thread, rbTree)->runtimVirtualNs;
-  uint32_t nodeValue = getNode(node, Thread, rbTree)->runtimVirtualNs;
-  if (nodeValue >= parentValue) {
-    if (root->right != nullptr) {
-      thread_insert_to_rb_tree(root->right, node);
-    } else {
-      root->right = node;
-      rbtree_balance(root, node);
-    }
-  } else {
-    if (root->left != nullptr) {
-      thread_insert_to_rb_tree(root->left, node);
-    } else {
-      root->left = node;
-      rbtree_balance(root, node);
-    }
-  }
-}
+extern uint64_t ktimer_sys_runtime();
 
 Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uint32_t priority) {
   // 1. allocate stack memory from kernel heap for idle task
@@ -59,23 +42,38 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
     thread->currCpu = INVALID_CPU;
     thread->lastCpu = INVALID_CPU;
     thread->entry = (ThreadStartRoutine)entry;
+
     thread->runtimeNs = 0;
     thread->runtimVirtualNs = 0;
+    thread->startTime = ktimer_sys_runtime();
+
     thread->pid = 0;
     strcpy(thread->name, name);
     thread->arg = arg;
+
+    thread->threadList.prev = nullptr;
+    thread->threadList.next = nullptr;
+
+    thread->threadReadyQueue.prev = nullptr;
+    thread->threadReadyQueue.next = nullptr;
+
+    thread->rbTree.parent = nullptr;
+    thread->rbTree.left = nullptr;
+    thread->rbTree.right = nullptr;
+    thread->rbTree.color = NODE_RED;
     // todo : other properties, like list
 
-    printf("[Thread]: thread '%s' created.\n", name);
+    LogInfo("[Thread]: thread '%s' created.\n", name);
     return thread;
   }
+  LogError("[Thread]: thread '%s' created failed.\n", name);
   return nullptr;
 }
 
 uint32_t *idle_thread_routine(int arg) {
   while (1) {
-    printf("[Thread]: IDLE: %d \n", arg);
-    // asm volatile("wfi");
+    LogInfo("[Thread]: IDLE: %d \n", arg);
+    asm volatile("wfi");
   }
 }
 
@@ -88,7 +86,7 @@ Thread *thread_create_idle_thread(uint32_t cpuNum) {
   char idleNameStr[10] = {'\0'};
   strcpy(idleThread->name, itoa(cpuNum, &idleNameStr, 10));
   // todo : other properties, like list
-  printf("[Thread]: Idle thread for CPU '%d' created.\n", cpuNum);
+  LogInfo("[Thread]: Idle thread for CPU '%d' created.\n", cpuNum);
   return idleThread;
 }
 
@@ -114,8 +112,9 @@ KernelStatus thread_join(Thread *thread, int *retcode, uint32_t deadline) {
 
 KernelStatus init_thread_struct(Thread *thread, const char *name) {
   strcpy(thread->name, name);
+  thread->threadStatus = THREAD_INITIAL;
   // todo : other properties, like list
-  printf("[Thread]: thread: '%s' initialed.\n", name);
+  LogInfo("[Thread]: thread: '%s' initialed.\n", name);
   return OK;
 }
 

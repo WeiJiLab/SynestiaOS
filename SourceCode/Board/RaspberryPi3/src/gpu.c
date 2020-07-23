@@ -6,6 +6,7 @@
 #include <gpu.h>
 #include <interrupt.h>
 #include <kheap.h>
+#include <log.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -33,12 +34,12 @@ void gpu_write_pixel_color(uint32_t x, uint32_t y, uint32_t c) {
 }
 
 uint32_t *gpu_flush(int arg) {
-  printf("[GPU]: flush.\n");
+  LogInfo("[GPU]: flush.\n");
   memcpy(lfb, &SCREEN_BUFFER, 1024 * 768 * 4);
 }
 
 void gpu_init(void) {
   framebuffer_init();
-  printf("[Framebuffer]: Inited 1024x768x32\n");
+  LogInfo("[Framebuffer]: Inited 1024x768x32\n");
   framebuffer_clear(0xFFFFFF);
 }

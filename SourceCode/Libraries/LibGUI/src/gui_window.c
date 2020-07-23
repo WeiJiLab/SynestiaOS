@@ -8,6 +8,7 @@
 #include <gui_label.h>
 #include <gui_panel.h>
 #include <gui_window.h>
+#include <log.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -49,7 +50,7 @@ void gui_window_create(GUIWindow *window) {
 
   window->children = kvector_allocate();
   if (window->children == nullptr) {
-    printf("[GUI]: window create failed, unable to allocate children vector\n");
+    LogError("[GUI]: window create failed, unable to allocate children vector\n");
   }
 }
 

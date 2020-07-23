@@ -3,6 +3,8 @@
 //
 
 #include <kheap.h>
+#include <log.h>
+#include <page.h>
 #include <stdlib.h>
 
 static heap_alloc_func heapAllocFunc = nullptr;
@@ -14,12 +16,12 @@ HeapArea *freeListHead;
 #define ALL_PHYSICAL_MEM_SIZE 0xFFFFFFFF
 
 void default_heap_alloc_func(void *ptr, uint32_t size) {
-  printf("[Heap]: alloc %d bytes at %d.\n", size, (uint32_t)ptr);
+  LogInfo("[Heap]: alloc %d bytes at %d.\n", size, (uint32_t)ptr);
 }
 
 void default_heap_free_func(void *ptr) {
   HeapArea *heap = (HeapArea *)(ptr - sizeof(HeapArea));
-  printf("[Heap]: free %d bytes at %d.\n", heap->size, (uint32_t)ptr);
+  LogInfo("[Heap]: free %d bytes at %d.\n", heap->size, (uint32_t)ptr);
 }
 
 void kheap_set_alloc_callback(heap_alloc_func callback) { heapAllocFunc = callback; }
@@ -30,13 +32,22 @@ KernelStatus kheap_init() {
   kheap_set_alloc_callback(default_heap_alloc_func);
   kheap_set_free_callback(default_heap_free_func);
 
-  uint32_t heap_address = (uint32_t)&__HEAP_BEGIN;
-  freeListHead = (HeapArea *)heap_address;
+  uint32_t heapAddress = (uint32_t)&__HEAP_BEGIN;
+  LogInfo("[KHeap] end bss at: %d. \n", heapAddress);
+
+  uint32_t heapPhysicalPage =
+      (uint32_t)page_alloc_huge_at(USAGE_KERNEL_HEAP, (heapAddress | 4 * KB) >> VA_OFFSET, 128 * MB - heapAddress);
+  LogInfo("[KHeap] alloc heap page: %d. \n", (uint32_t)heapPhysicalPage);
+
+  heapAddress = KERNEL_PHYSICAL_START + heapPhysicalPage * PAGE_SIZE;
+  LogInfo("[KHeap] kheap at: %d. \n", heapAddress);
+
+  freeListHead = (HeapArea *)heapAddress;
   freeListHead->size = 0;
   freeListHead->list.prev = nullptr;
 
-  HeapArea *freeArea = (HeapArea *)(heap_address + sizeof(HeapArea));
-  freeArea->size = (ALL_PHYSICAL_MEM_SIZE - (uint32_t)(char *)heap_address - 2 * sizeof(HeapArea)); // all memory
+  HeapArea *freeArea = (HeapArea *)(heapAddress + sizeof(HeapArea));
+  freeArea->size = (ALL_PHYSICAL_MEM_SIZE - (uint32_t)(char *)heapAddress - 2 * sizeof(HeapArea)); // all memory
   freeListHead->list.next = &freeArea->list;
   freeArea->list.next = nullptr;
   freeArea->list.prev = &freeListHead->list;
@@ -50,14 +61,14 @@ void *kheap_alloc(uint32_t size) {
   uint32_t allocSize = size + sizeof(HeapArea);
 
   if (freeListHead == nullptr) {
-    printf("[KHeap]: failed to get freeListHead.\n");
+    LogError("[KHeap]: failed to get freeListHead.\n");
     return nullptr;
   }
 
   HeapArea *currentFreeArea = freeListHead;
   while (currentFreeArea != nullptr) {
-    // if the size of the free block can contain the request size and a rest HeapArea, then just use it, and split a new
-    // block
+    // if the size of the free block can contain the request size and a rest HeapArea,
+    // then just use it, and split a new block
     if (currentFreeArea->size >= allocSize) {
       // 1. split a rest free HeapArea
       uint32_t newFreeHeapAreaAddress = (uint32_t)(void *)currentFreeArea + sizeof(HeapArea) + size;
