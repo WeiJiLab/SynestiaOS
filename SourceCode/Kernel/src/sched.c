@@ -28,19 +28,25 @@ void tick() {
   schd_switch_next();
 }
 
+Thread *tmpThread = nullptr;
 KernelStatus schd_switch_next(void) {
-  // switch to virtualRuntime mix Thread in cfs tree
-  RBNode *minvirtualRuntimeNode = rbtree_get_min(&headThread->rbTree);
-
-  if (minvirtualRuntimeNode == nullptr) {
-    LogError("[CFS]: The smallest node from csf tree is null. \n");
+  schd_switch_to(tmpThread);
+  if (tmpThread->threadList.next != nullptr) {
+    tmpThread = getNode(tmpThread->threadList.next, Thread, threadList);
+  } else {
+    tmpThread = headThread;
   }
 
-  Thread *thread = getNode(minvirtualRuntimeNode, Thread, rbTree);
-  LogInfo("[CFS]: smallet thread '%s'. \n", thread->name);
-  schd_switch_to(thread);
-  thread->runtimVirtualNs += TIMER_TICK_MS;
-  schd_reschedule();
+  // switch to virtualRuntime mix Thread in cfs tree
+  // RBNode *minvirtualRuntimeNode = rbtree_get_min(&headThread->rbTree);
+  // if (minvirtualRuntimeNode == nullptr) {
+  //   LogError("[CFS]: The smallest node from csf tree is null. \n");
+  // }
+  // Thread *thread = getNode(minvirtualRuntimeNode, Thread, rbTree);
+  // LogInfo("[CFS]: smallet thread '%s'. \n", thread->name);
+  // schd_switch_to(thread);
+  // thread->runtimVirtualNs += 1;
+  // schd_reschedule();
   return OK;
 }
 
@@ -76,6 +82,7 @@ KernelStatus schd_init() {
   }
   LogInfo("[Schd]: Schd inited.\n");
   headThread = currentThread;
+  tmpThread = headThread;
   return OK;
 }
 
@@ -128,14 +135,13 @@ KernelStatus schd_switch_to(Thread *thread) {
 }
 
 KernelStatus schd_add_to_cfs_schduler(Thread *root, Thread *node) {
-  KernelStatus ret = OK;
   RBNode *nd = nullptr;
 
   /* Case 1: Simplest case -- tree is empty */
   if (&root->rbTree == nullptr) {
     root->rbTree = node->rbTree;
     node->rbTree.color = NODE_BLACK;
-    return ret;
+    return OK;
   }
 
   /* Otherwise, insert the node as you would typically in a BST */
@@ -219,7 +225,7 @@ KernelStatus schd_remove_from_schduler(Thread *thread) {
 KernelStatus schd_reschedule(void) {
   KernelVector *vector = kvector_allocate();
   rbtree_reconstruct_to_list(vector, &headThread->rbTree);
-  LogInfo("[CSF]: %d thread in cfs.\n", vector->index);
+  LogInfo("[CSF]: %d thread in cfs.\n", kvector_size(vector));
 
   headThread->rbTree.parent = nullptr;
   headThread->rbTree.left = nullptr;

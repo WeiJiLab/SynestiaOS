@@ -20,7 +20,10 @@ KernelVector *kvector_allocate() {
 }
 
 KernelStatus kvector_resize(KernelVector *vector, uint32_t newSize) {
-  kheap_realloc(vector, newSize);
+  vector = kheap_realloc(vector, newSize);
+  if (vector == nullptr) {
+    return ERROR;
+  }
   vector->size = newSize;
   return OK;
 }
@@ -36,8 +39,10 @@ KernelStatus kvector_free(KernelVector *vector) {
 
 KernelStatus kvector_add(KernelVector *vector, ListNode *node) {
   if (vector->index >= vector->size) {
-    KernelStatus status = kvector_resize(vector, vector->size * 2);
+    vector->size += DEFAULT_VECTOR_SIZE;
+    KernelStatus status = kvector_resize(vector, vector->size * sizeof(ListNode *) + sizeof(KernelVector));
     if (status != OK) {
+      LogError("[KVector] kVector resiz failed.\n");
       return status;
     }
   }
@@ -51,6 +56,8 @@ ListNode *kvector_get(KernelVector *vector, uint32_t index) { return vector->nod
 KernelStatus kvector_remove_index(KernelVector *vector, uint32_t index) {}
 
 KernelStatus kvector_remove(KernelVector *vector, ListNode *index) {}
+
+uint32_t kvector_size(KernelVector *vector) { return vector->index; }
 
 bool kvector_is_empty(KernelVector *vector) { return vector->index == 0; }
 

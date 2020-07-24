@@ -132,6 +132,10 @@ void *kheap_calloc(uint32_t num, uint32_t size) { return kheap_alloc(num * size)
 void *kheap_realloc(void *ptr, uint32_t size) {
   // 1. alloc new heap area
   void *newHeapArea = kheap_alloc(size);
+  if (newHeapArea == nullptr) {
+    LogError("[heap] alloc mem failed when realloc.\n");
+    return;
+  }
 
   // 2. copy the data from old heap area to new heap area
   HeapArea *oldHeapArea = ptr - sizeof(HeapArea);
@@ -139,8 +143,11 @@ void *kheap_realloc(void *ptr, uint32_t size) {
   memcpy(newHeapArea, ptr, dataSize);
 
   // 3. free old heap area
-  kheap_free(ptr);
-  return newHeapArea + sizeof(HeapArea);
+  KernelStatus freeStatus = kheap_free(ptr);
+  if (freeStatus != OK) {
+    LogError("[heap] free old mem failed when realloc.\n");
+  }
+  return newHeapArea;
 }
 
 KernelStatus kheap_free(void *ptr) {
