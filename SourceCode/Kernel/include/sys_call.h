@@ -3,12 +3,11 @@
 //
 #ifndef __KERNEL_SYSCALL_H__
 #define __KERNEL_SYSCALL_H__
+#include <stdint.h>
+#include <type.h>
 
-#define asmlinkage __attribute__((regparm(0)))
+uint32_t sys_getpid(void);
 
-#define SYSCALL_DEFINE0(name) asmlinkage long sys_##name##(void)
+SysCall sys_call_table[] = {sys_getpid};
 
-// SYSCALL_DEFINE0(get_pid){
-//         return 0;
-// }
 #endif // __KERNEL_SYSCALL_H__

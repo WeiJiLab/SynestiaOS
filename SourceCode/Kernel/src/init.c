@@ -95,6 +95,7 @@ uint32_t *window_thread2(int args) {
   }
 }
 
+extern uint32_t getpid();
 uint32_t *window_thread3(int args) {
   GUIWindow window;
   gui_window_create(&window);
@@ -114,13 +115,14 @@ uint32_t *window_thread3(int args) {
     gui_animation_update(&translation);
     disable_interrupt();
     gui_window_draw(&window);
+    uint32_t pid = getpid();
+    LogWarnning("[Thread3] pid: %d .\n", pid);
     enable_interrupt();
   }
 }
 
 TimerHandler gpuHandler;
 void kernel_main(void) {
-
   print_splash();
 
   vmm_init();

@@ -31,6 +31,8 @@ rpi_irq_controller_t *getIRQController(void);
  */
 void init_interrupt();
 
+void swi(uint32_t num);
+
 /**
  * check interrupt status form cpsr register
  * @return
@@ -69,11 +71,5 @@ typedef struct TimerHandler {
 void register_time_interrupt(TimerHandler *handler);
 
 TimerHandler *timer_get_handler(void);
-
-/**
- * trigger a software interrupt
- * @param num
- */
-void swi(uint32_t num);
 
 #endif // __KERNEL_INTERRUPT_H__

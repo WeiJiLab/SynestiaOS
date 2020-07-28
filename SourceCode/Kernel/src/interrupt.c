@@ -16,6 +16,19 @@ void init_interrupt() {
   LogInfo("[Interrupt]: interrupt init\n");
 }
 
+void swi(uint32_t num) {
+  __asm__ __volatile__("push {lr}\n\t"
+                       "mov r0, %0\n\t"
+                       "swi 0x0\n\t"
+                       "pop {pc}\n\t" ::"r"(num));
+}
+
+uint32_t cpsr_value() {
+  uint32_t cpsr;
+  __asm__ __volatile__("mrs %0, cpsr" : "=r"(cpsr) :);
+  return cpsr;
+}
+
 uint32_t is_interrupt_enabled() {
   uint32_t cpsr;
   __asm__ __volatile__("mrs %0, cpsr" : "=r"(cpsr) :);
@@ -36,23 +49,24 @@ void disable_interrupt() {
   }
 }
 
-void swi(uint32_t num) {
-  __asm__ __volatile__("push {lr}\n\t"
-                       "mov r0, %0\n\t"
-                       "swi 0x0\n\t"
-                       "pop {pc}\n\t" ::"r"(num));
-}
-
-void hello_from_swi() {
-  disable_interrupt();
-  const char str[] = "hello from swi\n";
-  print(str);
-  enable_interrupt();
-}
-
 void __attribute__((interrupt("UNDEF"))) undefined_instruction_handler(void) {}
 
-void __attribute__((interrupt("SWI"))) software_interrupt_handler(void) { hello_from_swi(); }
+extern SysCall sys_call_table[];
+
+int software_interrupt_handler() {
+  volatile int r0, r1, r2, r3, r4, sysCallNo;
+  __asm__ volatile("mov %0,r1\n\t"
+                   "mov %1,r2\n\t"
+                   "mov %2,r4\n\t"
+                   "mov %3,r5\n\t"
+                   "mov %4,r6\n\t"
+                   "mov %5,r7\n\t"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3), "=r"(r4), "=r"(sysCallNo)
+                   :
+                   : "r1", "r2", "r4", "r5", "r6", "r7");
+
+  return sys_call_table[sysCallNo](r0, r1, r2, r3, r4);
+}
 
 void __attribute__((interrupt("ABORT"))) prefetch_abort_handler(void) {}
 
