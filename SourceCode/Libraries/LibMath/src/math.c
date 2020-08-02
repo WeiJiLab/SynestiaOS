@@ -3,32 +3,14 @@
 //
 #include <math.h>
 
-float fmod(float r, float mod) {
-  // todo:
-  return 0;
-}
+float fmod(float x, float y) { return __builtin_fmod(x, y); }
 
-float cosf(float angle) {
-  // todo:
-  return 0;
-}
+float cosf(float x) { return __builtin_cosf(x); }
 
-float sinf(float angle) {
-  // todo:
-  return 0;
-}
+float sinf(float x) { return __builtin_sinf(x); }
 
-float tanf(float angle) {
-  // todo:
-  return 0;
-}
+float tanf(float angle) { return __builtin_sinf(angle) / __builtin_cosf(angle); }
 
-float fmax(float x, float y) {
-  // todo:
-  return 0;
-}
+float fmax(float x, float y) { return x > y ? x : y; }
 
-float powf(float x, float y) {
-  // todo:
-  return 0;
-}
+float powf(float x, float y) { return __builtin_powf(x, y); }

@@ -4,14 +4,17 @@
 
 #include <gfx2d.h>
 #include <gui_button.h>
+#include <gui_canvas.h>
 #include <gui_container.h>
 #include <gui_label.h>
 #include <gui_panel.h>
+#include <gui_view3d.h>
 #include <gui_window.h>
 #include <log.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
+extern uint32_t GFX2D_BUFFER[1024 * 768];
 void gui_window_create(GUIWindow *window) {
   window->component.type = WINDOW;
   window->component.visable = true;
@@ -36,15 +39,15 @@ void gui_window_create(GUIWindow *window) {
   window->component.margin.left = DEFAULT_MARGIN;
   window->component.margin.right = DEFAULT_MARGIN;
 
-  window->component.background.a = 0x00;
-  window->component.background.r = 0xFF;
-  window->component.background.g = 0xFF;
-  window->component.background.b = 0xFF;
+  window->component.background.a = (FLUENT_PRIMARY_BACK_COLOR >> 24) & 0xFF;
+  window->component.background.r = (FLUENT_PRIMARY_BACK_COLOR >> 16) & 0xFF;
+  window->component.background.g = (FLUENT_PRIMARY_BACK_COLOR >> 8) & 0xFF;
+  window->component.background.b = FLUENT_PRIMARY_BACK_COLOR & 0xFF;
 
-  window->component.foreground.a = 0x00;
-  window->component.foreground.r = 0x00;
-  window->component.foreground.g = 0x00;
-  window->component.foreground.b = 0x00;
+  window->component.foreground.a = (FLUENT_PRIMARY_FORE_COLOR >> 24) & 0xFF;
+  window->component.foreground.r = (FLUENT_PRIMARY_FORE_COLOR >> 16) & 0xFF;
+  window->component.foreground.g = (FLUENT_PRIMARY_FORE_COLOR >> 8) & 0xFF;
+  window->component.foreground.b = FLUENT_PRIMARY_FORE_COLOR & 0xFF;
 
   window->title = "";
 
@@ -75,10 +78,11 @@ void gui_window_add_children(GUIWindow *window, GUIComponent *component) {
 }
 
 void gui_window_draw(GUIWindow *window) {
+  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
   if (window->component.visable) {
     if (window->component.colorMode == RGB) {
       // 1. draw_background
-      gfx2d_fill_rect(window->component.position.x, window->component.position.y,
+      gfx2d_fill_rect(context, window->component.position.x, window->component.position.y,
                       window->component.position.x + window->component.size.width,
                       window->component.position.y + window->component.size.height + DEFAULT_WINDOW_HEADER_HEIGHT,
                       window->component.background.r << 16 | window->component.background.g << 8 |
@@ -86,43 +90,63 @@ void gui_window_draw(GUIWindow *window) {
     }
 
     // 2. draw header
-    gfx2d_fill_rect(window->component.position.x, window->component.position.y,
+    gfx2d_fill_rect(context, window->component.position.x, window->component.position.y,
                     window->component.position.x + window->component.size.width,
                     window->component.position.y + DEFAULT_WINDOW_HEADER_HEIGHT, FLUENT_PRIMARY_COLOR);
 
+    uint16_t *bitmap = win_app_16_bits();
+    for (uint32_t i = 0; i < 16; i++) {
+      for (uint32_t j = 0; j < 16; j++) {
+        if ((bitmap[i] & (0x1 << j)) > 0) {
+          gfx2d_write_pixel_color(context, window->component.position.x + j + DEFAULT_PADDING,
+                                  window->component.position.y + i + DEFAULT_PADDING + 4, 0xFFFFFF);
+        }
+      }
+    }
+
     // 3. draw_font
     char *tmp = window->title;
-    uint32_t xOffset = 0;
+    uint32_t xOffset = 2;
     while (*tmp) {
-      gfx2d_draw_ascii(window->component.position.x + xOffset * DEFAULT_FONT_SIZE + DEFAULT_PADDING,
-                       window->component.position.y + DEFAULT_PADDING, *tmp, 0xFFFFFF);
+      gfx2d_draw_ascii(context, window->component.position.x + xOffset * DEFAULT_FONT_SIZE + 2 * DEFAULT_PADDING,
+                       window->component.position.y + 2 * DEFAULT_PADDING, *tmp, 0xFFFFFF);
       xOffset++;
       tmp++;
     }
 
     // 4. draw header window
-    gfx2d_draw_rect(window->component.position.x + window->component.size.width - 24 * 3,
-                    window->component.position.y + 4,
-                    window->component.position.x + window->component.size.width - 24 * 3 + 16,
-                    window->component.position.y + 4 + 16, 0x00FFFFFF);
-    gfx2d_draw_ascii(window->component.position.x + window->component.size.width - 24 * 3 + 4,
-                     window->component.position.y + 4 + 4, '_', 0xFFFFFF);
-    gfx2d_draw_rect(window->component.position.x + window->component.size.width - 24 * 2,
-                    window->component.position.y + 4,
-                    window->component.position.x + window->component.size.width - 24 * 2 + 16,
-                    window->component.position.y + 4 + 16, 0x00FFFFFF);
-    gfx2d_draw_ascii(window->component.position.x + window->component.size.width - 24 * 2 + 4,
-                     window->component.position.y + 4 + 4, '#', 0xFFFFFF);
+    uint16_t *minBitmap = win_min_16_bits();
+    for (uint32_t i = 0; i < 16; i++) {
+      for (uint32_t j = 0; j < 16; j++) {
+        if ((minBitmap[i] & (0x1 << j)) > 0) {
+          gfx2d_write_pixel_color(context, window->component.position.x + j + window->component.size.width - 24 * 3,
+                                  window->component.position.y + i + DEFAULT_PADDING + 4, 0xFFFFFF);
+        }
+      }
+    }
 
-    gfx2d_draw_rect(window->component.position.x + window->component.size.width - 24 * 1,
-                    window->component.position.y + 4,
-                    window->component.position.x + window->component.size.width - 24 * 1 + 16,
-                    window->component.position.y + 4 + 16, 0x00FFFFFF);
-    gfx2d_draw_ascii(window->component.position.x + window->component.size.width - 24 * 1 + 4,
-                     window->component.position.y + 4 + 4, 'x', 0xFFFFFF);
+    uint16_t *maxBitmap = win_max_16_bits();
+    for (uint32_t i = 0; i < 16; i++) {
+      for (uint32_t j = 0; j < 16; j++) {
+        if ((maxBitmap[i] & (0x1 << j)) > 0) {
+          gfx2d_write_pixel_color(context, window->component.position.x + j + window->component.size.width - 24 * 2,
+                                  window->component.position.y + i + DEFAULT_PADDING + 4, 0xFFFFFF);
+        }
+      }
+    }
+
+    uint16_t *closeBitmap = win_close_16_bits();
+    for (uint32_t i = 0; i < 16; i++) {
+      for (uint32_t j = 0; j < 16; j++) {
+        if ((closeBitmap[i] & (0x1 << j)) > 0) {
+          gfx2d_write_pixel_color(context, window->component.position.x + j + window->component.size.width - 24,
+                                  window->component.position.y + i + DEFAULT_PADDING + 4, 0xFFFFFF);
+        }
+      }
+    }
 
     // 5. draw border
-    gfx2d_draw_rect(window->component.position.x, window->component.position.y,
+    gfx2d_draw_rect(context, window->component.position.x, window->component.position.y,
                     window->component.position.x + window->component.size.width,
                     window->component.position.y + window->component.size.height + DEFAULT_WINDOW_HEADER_HEIGHT,
                     FLUENT_PRIMARY_COLOR);
@@ -160,6 +184,24 @@ void gui_window_draw_children(GUIWindow *window) {
         label->component.position.y = label->component.position.y + window->component.position.y +
                                       DEFAULT_WINDOW_HEADER_HEIGHT + window->component.padding.top;
         gui_label_draw(label);
+        break;
+      }
+
+      case CANVAS: {
+        GUICanvas *canvas = getNode(component, GUICanvas, component);
+        canvas->component.position.x = window->component.position.x + window->component.padding.left;
+        canvas->component.position.y =
+            window->component.position.y + DEFAULT_WINDOW_HEADER_HEIGHT + window->component.padding.top;
+        gui_canvas_draw(canvas);
+        break;
+      }
+
+      case VIEW3D: {
+        GUIView3D *view = getNode(component, GUIView3D, component);
+        view->component.position.x = window->component.position.x + window->component.padding.left;
+        view->component.position.y =
+            window->component.position.y + DEFAULT_WINDOW_HEADER_HEIGHT + window->component.padding.top;
+        gui_view3d_draw(view);
         break;
       }
 

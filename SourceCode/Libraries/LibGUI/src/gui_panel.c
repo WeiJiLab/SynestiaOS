@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+extern uint32_t GFX2D_BUFFER[1024 * 768];
 void gui_panel_create(GUIPanel *panel) {
   panel->component.type = PANEL;
   panel->component.visable = true;
@@ -35,15 +36,15 @@ void gui_panel_create(GUIPanel *panel) {
   panel->component.margin.left = DEFAULT_MARGIN;
   panel->component.margin.right = DEFAULT_MARGIN;
 
-  panel->component.background.a = 0x00;
-  panel->component.background.r = 0xFF;
-  panel->component.background.g = 0xFF;
-  panel->component.background.b = 0xFF;
+  panel->component.background.a = (FLUENT_PRIMARY_BACK_COLOR >> 24) & 0xFF;
+  panel->component.background.r = (FLUENT_PRIMARY_BACK_COLOR >> 16) & 0xFF;
+  panel->component.background.g = (FLUENT_PRIMARY_BACK_COLOR >> 8) & 0xFF;
+  panel->component.background.b = FLUENT_PRIMARY_BACK_COLOR & 0xFF;
 
-  panel->component.foreground.a = 0x00;
-  panel->component.foreground.r = 0x00;
-  panel->component.foreground.g = 0x00;
-  panel->component.foreground.b = 0x00;
+  panel->component.foreground.a = (FLUENT_PRIMARY_FORE_COLOR >> 24) & 0xFF;
+  panel->component.foreground.r = (FLUENT_PRIMARY_FORE_COLOR >> 16) & 0xFF;
+  panel->component.foreground.g = (FLUENT_PRIMARY_FORE_COLOR >> 8) & 0xFF;
+  panel->component.foreground.b = FLUENT_PRIMARY_FORE_COLOR & 0xFF;
 
   panel->children = kvector_allocate();
   if (panel->children == nullptr) {
@@ -117,10 +118,11 @@ void gui_panel_draw_children(GUIPanel *panel) {
 }
 
 void gui_panel_draw(GUIPanel *panel) {
+  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
   if (panel->component.visable) {
     // 1. draw_background
     if (panel->component.colorMode == RGB) {
-      gfx2d_fill_rect(panel->component.position.x, panel->component.position.y,
+      gfx2d_fill_rect(context, panel->component.position.x, panel->component.position.y,
                       panel->component.position.x + panel->component.size.width,
                       panel->component.position.y + panel->component.size.height,
                       panel->component.background.r << 16 | panel->component.background.g << 8 |

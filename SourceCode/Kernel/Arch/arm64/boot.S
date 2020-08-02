@@ -1,11 +1,12 @@
 .section ".text.boot"
 .globl _start
 _start:
+    // comment out following code because it's halted within exception.S#reset_handler
     // Disable extra smp cpus
-    mrs x0, mpidr_el1
-    and x0, x0, #3
-    cmp x0, #0
-    b.ne _halt_smp
+    // mrs x0, mpidr_el1
+    // and x0, x0, #0xFF
+    // cmp x0, #0
+    // b.ne _halt_smp
 
     ldr x0, =__stack
     mov sp, x0
@@ -38,7 +39,12 @@ _start:
     orr r0,     #0x13
     msr cpsr_c, r0
 
-    bl  kernel_main
+#ifndef ENV_KERNEL_UNIT_TESTS
+    bl kernel_main
+#else
+#warning "building kernel for unit tests!!!"
+    bl kernel_main_tests
+#endif
 
 _halt_smp:
     wfi // wait for interrup coming

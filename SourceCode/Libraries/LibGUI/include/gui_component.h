@@ -6,13 +6,14 @@
 #define __LIBRARY_LIBGUI_COMPONENT_H__
 
 #include <list.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 #define DEFAULT_FONT_SIZE 8
 #define DEFAULT_PADDING 8
 #define DEFAULT_MARGIN 0
 
-#define DEFAULT_WINDOW_HEADER_HEIGHT DEFAULT_FONT_SIZE + 2 * DEFAULT_PADDING
+#define DEFAULT_WINDOW_HEADER_HEIGHT DEFAULT_FONT_SIZE + 4 * DEFAULT_PADDING
 
 typedef struct Position {
   uint32_t x;
@@ -57,6 +58,7 @@ typedef enum ComponentType {
   PANEL,
   CONTAINER,
   CANVAS,
+  VIEW3D,
 } ComponentType;
 
 typedef enum ColorMode {

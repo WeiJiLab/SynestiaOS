@@ -1,3 +1,4 @@
+#include <cache.h>
 #include <font8bits.h>
 #include <gfx2d.h>
 #include <gpu.h>
@@ -7,56 +8,48 @@
 #include <gui_container.h>
 #include <gui_label.h>
 #include <gui_panel.h>
+#include <gui_view3d.h>
 #include <gui_window.h>
 #include <interrupt.h>
 #include <kheap.h>
 #include <log.h>
 #include <sched.h>
+#include <spinlock.h>
 #include <stdlib.h>
+#include <string.h>
 #include <synestia_os_hal.h>
 #include <vmm.h>
+#include <mutex.h>
 
 extern uint32_t *gpu_flush(int args);
+extern uint32_t GFX2D_BUFFER[1024 * 768];
 
 void print_splash() {
-  LogWarnning("   _____                       _   _       \n");
-  LogWarnning("  / ____|                     | | (_)      \n");
-  LogWarnning(" | (___  _   _ _ __   ___  ___| |_ _  __ _ \n");
-  LogWarnning("  \\___ \\| | | | '_ \\ / _ \\/ __| __| |/ _` |\n");
-  LogWarnning("  ____) | |_| | | | |  __/\\__ \\ |_| | (_| |\n");
-  LogWarnning(" |_____/ \\__, |_| |_|\\___||___/\\__|_|\\__,_|\n");
-  LogWarnning("          __/ |                            \n");
-  LogWarnning("         |___/                          \n");
+  LogWarn("   _____                       _   _       \n");
+  LogWarn("  / ____|                     | | (_)      \n");
+  LogWarn(" | (___  _   _ _ __   ___  ___| |_ _  __ _ \n");
+  LogWarn("  \\___ \\| | | | '_ \\ / _ \\/ __| __| |/ _` |\n");
+  LogWarn("  ____) | |_| | | | |  __/\\__ \\ |_| | (_| |\n");
+  LogWarn(" |_____/ \\__, |_| |_|\\___||___/\\__|_|\\__,_|\n");
+  LogWarn("          __/ |                            \n");
+  LogWarn("         |___/                          \n");
 }
 
 void draw_task_bar() {
-  uint32_t *barBuffer = (uint32_t *)kheap_alloc(1024 * 32 * 4);
-
-  for (int i = 0; i < 1024; i++) {
-    for (int j = 0; j < 31; j++) {
-      barBuffer[j * 1024 + i] = ((FLUENT_PRIMARY_COLOR >> 16) & 0xFF - j) << 16 |
-                                ((FLUENT_PRIMARY_COLOR >> 8) & 0xFF - j) << 8 | (FLUENT_PRIMARY_COLOR & 0xFF - j);
-    }
-  }
-  for (int i = 0; i < 1024; i++) {
-    barBuffer[31 * 1024 + i] = 0x999999;
-  }
-  gfx2d_draw_bitmap(0, 0, 1024, 32, barBuffer);
-  gfx2d_draw_logo(0, 0, 0xFFFFFF);
+  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
+  gfx2d_fill_rect(context, 0, 0, 1024, 48, FLUENT_PRIMARY_COLOR);
+  gfx2d_draw_logo(context, 8, 8, 0xFFFFFF);
 }
 
 uint32_t *window_thread1(int args) {
   uint32_t count = 0;
   GUIWindow window;
   gui_window_create(&window);
-  window.component.size.width = 510;
-  window.component.size.height = 500;
-  gui_window_init(&window, 0, 33, "window1");
+  window.component.size.width = 300;
+  window.component.size.height = 200;
+  gui_window_init(&window, 20, 70, "window1");
   GUILabel label;
   gui_label_create(&label);
-  label.component.foreground.r = 0x00;
-  label.component.foreground.g = 0x00;
-  label.component.foreground.b = 0x00;
   label.component.colorMode = TRANSPARENT;
   label.component.size.width = 100;
   gui_window_add_children(&window, &(label.component));
@@ -74,14 +67,11 @@ uint32_t *window_thread2(int args) {
   uint32_t count = 0;
   GUIWindow window;
   gui_window_create(&window);
-  window.component.size.width = 510;
-  window.component.size.height = 500;
-  gui_window_init(&window, 512, 33, "window2");
+  window.component.size.width = 300;
+  window.component.size.height = 200;
+  gui_window_init(&window, 340, 70, "window2");
   GUILabel label;
   gui_label_create(&label);
-  label.component.foreground.r = 0x00;
-  label.component.foreground.g = 0x00;
-  label.component.foreground.b = 0x00;
   label.component.colorMode = TRANSPARENT;
   label.component.size.width = 100;
   gui_window_add_children(&window, &(label.component));
@@ -99,9 +89,9 @@ extern uint32_t getpid();
 uint32_t *window_thread3(int args) {
   GUIWindow window;
   gui_window_create(&window);
-  window.component.size.width = 1022;
-  window.component.size.height = 150;
-  gui_window_init(&window, 0, 560, "window3");
+  window.component.size.width = 620;
+  window.component.size.height = 200;
+  gui_window_init(&window, 20, 330, "Button Animation Test Window");
   GUIButton button;
   gui_button_create(&button);
   gui_button_init(&button, 0, 0, "TEST");
@@ -116,42 +106,103 @@ uint32_t *window_thread3(int args) {
     disable_interrupt();
     gui_window_draw(&window);
     uint32_t pid = getpid();
-    LogWarnning("[Thread3] pid: %d .\n", pid);
+    LogWarn("[Thread3] pid: %d .\n", pid);
+    enable_interrupt();
+  }
+}
+
+uint32_t *window_thread4(int args) {
+  GUIWindow window;
+  gui_window_create(&window);
+  window.component.size.width = 340;
+  window.component.size.height = 200;
+  gui_window_init(&window, 660, 70, "Canvas 2D Test Window");
+  GUICanvas canvas;
+  gui_canvas_create(&canvas);
+  gui_canvas_init(&canvas, 0, 0);
+  gui_window_add_children(&window, &(canvas.component));
+  gui_canvas_fill_circle(&canvas, 30, 30, 20, 0x00FF0000);
+  gui_canvas_fill_rect(&canvas, 60, 60, 100, 100, 0x0000FF00);
+  gui_canvas_fill_triangle(&canvas, 10, 60, 60, 60, 10, 100, 0x0000FF);
+  while (1) {
+    disable_interrupt();
+    gui_window_draw(&window);
+    enable_interrupt();
+  }
+}
+
+uint32_t *window_thread5(int args) {
+  GUIWindow window;
+  gui_window_create(&window);
+  window.component.size.width = 340;
+  window.component.size.height = 200;
+  gui_window_init(&window, 660, 330, "View 3D Test Window");
+  GUIView3D view;
+  gui_view3d_create(&view);
+  gui_view3d_init(&view, 0, 0);
+  gui_window_add_children(&window, &(view.component));
+  while (1) {
+    disable_interrupt();
+    gui_window_draw(&window);
     enable_interrupt();
   }
 }
 
 TimerHandler gpuHandler;
+SpinLock spinlock;
+Mutex mutex;
+Atomic atomic;
 void kernel_main(void) {
-  print_splash();
+  uint32_t cpuid = read_cpuid();
+  LogWarn("[MPCore] cpuid: %d .\n", cpuid);
+  if (cpuid == 0) {
+    atomic_create(&atomic);
+    mutex_create(&mutex,&atomic);
+    spinlock_create(&spinlock,&mutex);
 
-  vmm_init();
+    init_bsp();
+    print_splash();
 
-  kheap_init();
+    vmm_init();
+    kheap_init();
+    init_interrupt();
+    gpu_init();
 
-  init_bsp();
+    Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
+    gfx2d_draw_bitmap(context, 0, 0, 1024, 768, desktop());
+    draw_task_bar();
 
-  init_interrupt();
+    gpuHandler.node.next = nullptr;
+    gpuHandler.node.prev = nullptr;
+    gpuHandler.timer_interrupt_handler = &gpu_flush;
+    register_time_interrupt(&gpuHandler);
 
-  gpu_init();
-  gfx2d_draw_bitmap(0, 0, 1024, 768, desktop());
-  draw_task_bar();
+    schd_init();
 
-  gpuHandler.node.next = nullptr;
-  gpuHandler.node.prev = nullptr;
-  gpuHandler.timer_interrupt_handler = &gpu_flush;
-  register_time_interrupt(&gpuHandler);
+    Thread *window1Thread = thread_create("window1", &window_thread1, 1, 1);
+    schd_init_thread(window1Thread, 0);
 
-  schd_init();
+    Thread *window2Thread = thread_create("window2", &window_thread2, 1, 1);
+    schd_init_thread(window2Thread, 1);
 
-  Thread *window1Thread = thread_create("window1", &window_thread1, 1, 1);
-  schd_init_thread(window1Thread, 0);
+    Thread *window3Thread = thread_create("window3", &window_thread3, 1, 1);
+    schd_init_thread(window3Thread, 2);
 
-  Thread *window2Thread = thread_create("window2", &window_thread2, 1, 1);
-  schd_init_thread(window2Thread, 1);
+    Thread *window4Thread = thread_create("window4", &window_thread4, 1, 1);
+    schd_init_thread(window4Thread, 3);
 
-  Thread *window3Thread = thread_create("window3", &window_thread3, 1, 1);
-  schd_init_thread(window3Thread, 2);
+    Thread *window5Thread = thread_create("window5", &window_thread5, 1, 1);
+    schd_init_thread(window5Thread, 4);
 
-  schd_schedule();
+    asm volatile("SEV");
+    schd_schedule();
+  }
+  
+
+  while(1){
+    spinlock_acquire(&spinlock);
+    uint32_t cpuid = read_cpuid();
+    LogWarn("[MPCore] cpuid: %d .\n", cpuid);
+    spinlock_release(&spinlock);
+  }
 }
