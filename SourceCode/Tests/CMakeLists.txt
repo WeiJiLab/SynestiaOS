@@ -17,8 +17,17 @@ target_include_vmm_header_files(${KernelArchUnitTests})
 target_include_kernel_header_files(${KernelArchUnitTests})
 target_include_libc_header_files(${KernelArchUnitTests})
 
+if (SynestiaPlatform STREQUAL pi2)
+	set(boardObj BoardRaspberryPi)
+elseif (SynestiaPlatform STREQUAL pi3)
+	set(boardObj BoardRaspberryPi)
+elseif (SynestiaPlatform STREQUAL pi4)
+	set(boardObj BoardRaspberryPi)
+else ()
+	message(ERROR "unexpected PLATFORM ${PLATFORM}")
+endif ()
 
-set(KernelUnitTestsImg KernelUnitTests.img)
+set(KernelUnitTestsImg KernelUnitTests.elf)
 add_executable(${KernelUnitTestsImg}
         ${KernelUnitTestsSrc}
         $<TARGET_OBJECTS:${KernelArchUnitTests}>
@@ -28,10 +37,10 @@ add_executable(${KernelUnitTestsImg}
         $<TARGET_OBJECTS:LibGfx>
         $<TARGET_OBJECTS:LibGUI>
         $<TARGET_OBJECTS:Console>
-        $<TARGET_OBJECTS:BoardRaspberryPi3>)
+	$<TARGET_OBJECTS:${boardObj}>)
 target_include_tests_header_files(${KernelUnitTestsImg})
 target_include_libc_header_files(${KernelUnitTestsImg})
-target_include_raspberry_pi3_header_files(${KernelUnitTestsImg})
+target_include_raspberry_pi_header_files(${KernelUnitTestsImg})
 target_include_kernel_header_files(${KernelUnitTestsImg})
 target_include_vmm_header_files(${KernelUnitTestsImg})
 
