@@ -4,8 +4,6 @@
 
 #include <cache.h>
 #include <interrupt.h>
-#include <kqueue.h>
-#include <kvector.h>
 #include <log.h>
 #include <percpu.h>
 #include <sched.h>
@@ -29,7 +27,7 @@ void tick() {
   schd_switch_next();
 }
 
-SpinLockCreate(spinlock);
+SpinLock spinlock = SpinLockCreate();
 
 KernelStatus schd_switch_next(void) {
   uint32_t cpuid = read_cpuid();
@@ -38,11 +36,12 @@ KernelStatus schd_switch_next(void) {
   Thread *thread = perCpu->operations.getNextThread(perCpu);
 
   spinlock.operations.acquire(&spinlock);
+  thread->runtimVirtualNs += TIMER_TICK_MS;
   schd_switch_to(thread);
   spinlock.operations.release(&spinlock);
 
-  Thread *removedThread = perCpu->operations.removeThread(perCpu, thread);
-  if (removedThread != nullptr && removedThread != percpu_get(cpuid)->idleThread) {
+  if (thread != perCpu->idleThread) {
+    Thread *removedThread = perCpu->operations.removeThread(perCpu, thread);
     schd_add_thread(removedThread, removedThread->priority);
   }
   return OK;
@@ -56,7 +55,7 @@ KernelStatus schd_init() {
         return ERROR;
       }
       PerCpu *perCpu = percpu_get(cpuId);
-      perCpu->operations.init(perCpu, idleThread, cpuId);
+      perCpu->operations.init(perCpu, cpuId, idleThread);
     }
   }
 
@@ -69,7 +68,7 @@ KernelStatus schd_add_thread(Thread *thread, uint32_t priority) {
   PerCpu *perCpu = percpu_min_priority();
   KernelStatus threadAddStatus = perCpu->operations.insertThread(perCpu, thread);
   if (threadAddStatus != OK) {
-    LogError("[schd] thread %s add to schduler failed.\n", thread->name);
+    LogError("[Schd] thread %s add to schduler failed.\n", thread->name);
     return ERROR;
   }
   return OK;
@@ -124,4 +123,8 @@ KernelStatus schd_preempt(void) {
   return OK;
 }
 
-uint32_t schd_getpid() { return currentThread->pid; }
+uint32_t schd_getpid() {
+  uint32_t cpuid = read_cpuid();
+  PerCpu *perCpu = percpu_get(cpuid);
+  return perCpu->currentThread->pid;
+}

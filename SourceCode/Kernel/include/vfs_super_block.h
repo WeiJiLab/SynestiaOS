@@ -18,8 +18,8 @@ typedef enum FileSystemType {
   FILESYSTEM_FAT32,
 } FileSystemType;
 
-typedef DirectoryEntry *(*SuperBlockCreateDirectoryEntry)(struct SuperBlock *superBlock);
-typedef IndexNode *(*SuperBlockCreateIndexNode)(struct SuperBlock *superBlock);
+typedef DirectoryEntry *(*SuperBlockCreateDirectoryEntry)(struct SuperBlock *superBlock, const char *fileName);
+typedef IndexNode *(*SuperBlockCreateIndexNode)(struct SuperBlock *superBlock, struct DirectoryEntry *dentry);
 typedef struct SuperBlockOperations {
   SuperBlockCreateDirectoryEntry createDirectoryEntry;
   SuperBlockCreateIndexNode createIndexNode;
