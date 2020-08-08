@@ -3,6 +3,8 @@
 //
 
 #include <log.h>
+#include <mutex.h>
+#include <spinlock.h>
 #include <vfs_dentry.h>
 #include <vfs_inode.h>
 #include <vfs_super_block.h>
@@ -25,7 +27,11 @@ DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock
   directoryEntry->fileNameHash = directoryEntry->operations->hashOperation(directoryEntry);
   directoryEntry->indexNode = nullptr;
   directoryEntry->parent = nullptr;
-  //   directoryEntry->parallelLock = SpinLockCreate();
+  SpinLock parallelLock = SpinLockCreate();
+  directoryEntry->parallelLock = parallelLock;
+
+  directoryEntry->list.next = nullptr;
+  directoryEntry->list.prev = nullptr;
 
   return directoryEntry;
 }
@@ -40,8 +46,10 @@ IndexNode *vfs_super_block_default_create_index_node(struct SuperBlock *superBlo
 
   indexNode->operations->createOperation = vfs_inode_default_create;
   indexNode->operations->deleteOperation = vfs_inode_default_delete;
-  indexNode->operations->hardLinkOperation = vfs_inode_default_hard_link;
+  indexNode->operations->linkOperation = vfs_inode_default_link;
+  indexNode->operations->unLinkOperation = vfs_inode_default_unlink;
   indexNode->operations->makeDirectoryOperation = vfs_inode_default_make_directory;
+  indexNode->operations->deleteDirectoryOperation = vfs_inode_default_delete_directory;
   indexNode->operations->releaseOperation = vfs_inode_default_release;
   indexNode->operations->renameOperation = vfs_inode_default_rename;
 
@@ -50,12 +58,21 @@ IndexNode *vfs_super_block_default_create_index_node(struct SuperBlock *superBlo
   indexNode->mode = (INDEX_NODE_MODE_WRITEABLE | INDEX_NODE_MODE_READABLE) << 6 |
                     (INDEX_NODE_MODE_WRITEABLE | INDEX_NODE_MODE_READABLE) << 3 |
                     (INDEX_NODE_MODE_WRITEABLE | INDEX_NODE_MODE_READABLE);
-  //   indexNode->mutex = MutexCreate();
+  Mutex mutex = MutexCreate();
+  indexNode->mutex = mutex;
   indexNode->lastAccessTimestamp = 0;
   indexNode->lastUpdateTimestamp = 0;
   dentry->indexNode = indexNode;
 
   return indexNode;
+}
+
+KernelStatus vfs_super_block_default_destroy_dentry(struct SuperBlock *superBlock, struct DirectoryEntry *dentry) {
+  return kheap_free(dentry);
+}
+
+KernelStatus vfs_super_block_default_destroy_inode(struct SuperBlock *superBlock, struct IndexNode *indexNode) {
+  return kheap_free(indexNode);
 }
 
 SuperBlock *vfs_create_super_block() {
@@ -66,4 +83,6 @@ SuperBlock *vfs_create_super_block() {
   }
   superBlock->operations->createDirectoryEntry = vfs_super_block_default_create_directory_entry;
   superBlock->operations->createIndexNode = vfs_super_block_default_create_index_node;
+  superBlock->operations->destroyDirectoryEntry = vfs_super_block_default_destroy_dentry;
+  superBlock->operations->destroyIndexNode = vfs_super_block_default_destroy_inode;
 }

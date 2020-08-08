@@ -10,6 +10,14 @@
 #include <spinlock.h>
 #include <stdlib.h>
 
+uint32_t PRIORITY_2_WEIGHT[40] = {
+    88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916, 9548, 7620, 6100, 4904,
+    3906,  3121,  2501,  1991,  1586,  1277,  1024,  820,   655,   526,   423,  335,  272,  215,
+    172,   137,   110,   87,    70,    56,    45,    36,    29,    23,    18,   15,
+};
+
+#define PRIORITY_DEFAULT_WEIGHT 1024
+
 extern uint64_t ktimer_sys_runtime_tick(uint64_t tickIntreval);
 
 #define TIMER_TICK_MS 50
@@ -28,7 +36,6 @@ void tick() {
 }
 
 SpinLock spinlock = SpinLockCreate();
-
 KernelStatus schd_switch_next(void) {
   uint32_t cpuid = read_cpuid();
   LogWarn("[Schd]: cpuId %d .\n", cpuid);
@@ -36,8 +43,11 @@ KernelStatus schd_switch_next(void) {
   Thread *thread = perCpu->operations.getNextThread(perCpu);
 
   spinlock.operations.acquire(&spinlock);
-  thread->runtimVirtualNs += TIMER_TICK_MS;
+
+  thread->runtimeNs += TIMER_TICK_MS;
+  thread->runtimVirtualNs += (PRIORITY_DEFAULT_WEIGHT / PRIORITY_2_WEIGHT[thread->priority]) * thread->runtimeNs;
   schd_switch_to(thread);
+
   spinlock.operations.release(&spinlock);
 
   if (thread != perCpu->idleThread) {
@@ -109,17 +119,17 @@ KernelStatus schd_switch_to(Thread *thread) {
 }
 
 KernelStatus schd_block(void) {
-  // todo:
+  // TODO:
   return OK;
 }
 
 KernelStatus schd_yield(void) {
-  // todo:
+  // TODO:
   return OK;
 }
 
 KernelStatus schd_preempt(void) {
-  // todo:
+  // TODO:
   return OK;
 }
 
