@@ -1,4 +1,5 @@
 #include <cache.h>
+#include <ext2.h>
 #include <font8bits.h>
 #include <gfx2d.h>
 #include <gpu.h>
@@ -170,6 +171,7 @@ void kernel_main(void) {
     gpuHandler.timer_interrupt_handler = &gpu_flush;
     register_time_interrupt(&gpuHandler);
 
+    vfs_init();
     schd_init();
 
     Thread *window1Thread = thread_create("window1", &window_thread1, 1, 1);
@@ -189,6 +191,10 @@ void kernel_main(void) {
 
     bootSpinLock.operations.release(&bootSpinLock);
     schd_schedule();
+  }
+
+  if (read_cpuid() == 1) {
+    led_init();
   }
 
   // schd_switch_next();

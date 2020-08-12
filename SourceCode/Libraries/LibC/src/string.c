@@ -14,11 +14,46 @@ char *strcpy(char *des, char *source) {
   return des;
 }
 
+bool strcmp(char *str1, char *str2) {
+  char *tmpStr1 = str1;
+  char *tmpStr2 = str2;
+  uint32_t str1Len = strlen(tmpStr1);
+  uint32_t str2Len = strlen(tmpStr2);
+  if (str1Len != str2Len) {
+    return false;
+  }
+
+  if (str1Len < str2Len) {
+    while (*tmpStr1) {
+      if (*tmpStr1 == *tmpStr2) {
+        tmpStr1++;
+        tmpStr2++;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    while (*tmpStr2) {
+      if (*tmpStr2 == *tmpStr1) {
+        tmpStr2++;
+        tmpStr1++;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
 uint32_t strlen(const char *str) {
   const char *ptr = str;
-  while (*str++)
-    ;
-  return (str - ptr - 1);
+  uint32_t len = 0;
+  while (*ptr) {
+    len++;
+    ptr++;
+  }
+  return len;
 }
 
 void *memset(char *s, int c, uint32_t n) {

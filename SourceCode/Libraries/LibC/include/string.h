@@ -3,9 +3,12 @@
 //
 #ifndef __LIBRARY_LIBC_STRING_H__
 #define __LIBRARY_LIBC_STRING_H__
+#include <stdbool.h>
 #include <stdint.h>
 
 char *strcpy(char *des, char *source);
+
+bool strcmp(char *str1, char *str2);
 
 uint32_t strlen(const char *str);
 

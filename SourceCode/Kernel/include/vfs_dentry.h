@@ -11,7 +11,7 @@
 #include <spinlock.h>
 
 typedef uint64_t (*DirectoryEntryHashOperation)(struct DirectoryEntry *directoryEntry);
-typedef char *(*DirectoryEntryGetNameOperaction)(struct DirectoryEntry *directoryEntry);
+typedef char *(*DirectoryEntryGetNameOperation)(struct DirectoryEntry *directoryEntry);
 typedef KernelStatus (*DirectoryEntryDeleteOperation)(struct DirectoryEntry *directory);
 typedef KernelStatus (*DirectoryEntryReleaseOperation)(struct DirectoryEntry *directory);
 typedef KernelStatus (*DirectoryEntryInitOperation)(struct DirectoryEntry *directory, struct DirectoryEntry *parent,
@@ -20,7 +20,7 @@ typedef KernelStatus (*DirectoryEntryInitOperation)(struct DirectoryEntry *direc
 typedef struct DirectoryEntryOperations {
   DirectoryEntryInitOperation initOperation;
   DirectoryEntryHashOperation hashOperation;
-  DirectoryEntryGetNameOperaction getNameOperation;
+  DirectoryEntryGetNameOperation getNameOperation;
   DirectoryEntryDeleteOperation deleteOperation;
   DirectoryEntryReleaseOperation releaseOperation;
 } DirectoryEntryOperations;
@@ -36,7 +36,7 @@ typedef struct DirectoryEntry {
 
   char *fileName;
   uint64_t fileNameHash;
-  DirectoryEntryOperations *operations;
+  DirectoryEntryOperations operations;
 } DirectoryEntry;
 
 uint64_t vfs_directory_entry_default_hash(DirectoryEntry *DirectoryEntry);
