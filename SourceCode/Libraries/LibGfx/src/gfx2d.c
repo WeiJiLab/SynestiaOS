@@ -9,7 +9,23 @@
 uint32_t GFX2D_BUFFER[1024 * 768] = {0xFF};
 
 void gfx2d_write_pixel_color(Gfx2DContext context, uint32_t x, uint32_t y, uint32_t c) {
-  context.buffer[y * context.width + x] = c;
+
+  uint32_t color = c;
+  uint32_t alpha = (color >> 24) & 0xFF;
+  uint32_t r = (color >> 16) & 0xFF;
+  uint32_t g = (color >> 8) & 0xFF;
+  uint32_t b = (color)&0xFF;
+
+  uint32_t backColor = context.buffer[y * context.width + x];
+  uint32_t backR = (backColor >> 16) & 0xFF;
+  uint32_t backG = (backColor >> 8) & 0xFF;
+  uint32_t backB = (backColor)&0xFF;
+
+  uint32_t mixedR = ((0xFF - alpha) * r) / 0xFF + (alpha * backR) / 0xFF;
+  uint32_t mixedG = ((0xFF - alpha) * g) / 0xFF + (alpha * backG) / 0xFF;
+  uint32_t mixedB = ((0xFF - alpha) * b) / 0xFF + (alpha * backB) / 0xFF;
+
+  context.buffer[y * context.width + x] = mixedR << 16 | mixedG << 8 | mixedB;
 }
 
 void gfx2d_draw_pixel(Gfx2DContext context, int x, int y, uint32_t c) { gfx2d_write_pixel_color(context, x, y, c); }
@@ -418,22 +434,12 @@ void gfx2d_draw_ascii(Gfx2DContext context, int x, int y, uint8_t ch, uint32_t c
   }
 }
 
-void gfx2d_draw_logo(Gfx2DContext context, int x, int y, uint32_t c) {
-  uint32_t *bitmap = logo_32_bits();
-  for (uint32_t i = 0; i < 32; i++) {
-    for (uint32_t j = 0; j < 32; j++) {
-      if ((bitmap[i] & (0x1 << j)) > 0) {
-        gfx2d_write_pixel_color(context, x + j, y + i, c);
-      }
-    }
-  }
-}
-
 void gfx2d_draw_bitmap(Gfx2DContext context, int x, int y, int width, int height, uint32_t *bitmap) {
   int index = 0;
   for (uint32_t i = 0; i < height; i++) {
-    for (uint32_t j = 0; j < width; j++) {
-      gfx2d_write_pixel_color(context, x + j, y + i, bitmap[index]);
+    for (uint32_t j = width; j > 0; j--) {
+      uint32_t color = bitmap[index];
+      gfx2d_write_pixel_color(context, x + j, y + i, color);
       index++;
     }
   }

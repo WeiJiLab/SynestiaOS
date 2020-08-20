@@ -32,7 +32,7 @@ typedef struct SuperBlockOperations {
 } SuperBlockOperations;
 
 typedef struct SuperBlock {
-  char *fileName;
+  char *name;
   FileSystemType type;
   ListNode node;
   struct DirectoryEntry *rootDirectoryEntry;
@@ -40,5 +40,13 @@ typedef struct SuperBlock {
 } SuperBlock;
 
 SuperBlock *vfs_create_super_block();
+
+DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock *superBlock, const char *fileName);
+
+IndexNode *vfs_super_block_default_create_index_node(struct SuperBlock *superBlock, struct DirectoryEntry *dentry);
+
+KernelStatus vfs_super_block_default_destroy_dentry(struct SuperBlock *superBlock, struct DirectoryEntry *dentry);
+
+KernelStatus vfs_super_block_default_destroy_inode(struct SuperBlock *superBlock, struct IndexNode *indexNode);
 
 #endif // __KERNEL_VFS_SUPER_BLOCK_H__

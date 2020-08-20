@@ -20,9 +20,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <synestia_os_hal.h>
+#include <vfs.h>
 #include <vmm.h>
 
+extern char _binary_initrd_img_start[];
+extern char _binary_initrd_img_end[];
+extern char _binary_initrd_img_size[];
+uint32_t EXT2_ADDRESS = _binary_initrd_img_start;
+VFS *vfs;
+
 extern uint32_t *gpu_flush(int args);
+
 extern uint32_t GFX2D_BUFFER[1024 * 768];
 
 void print_splash() {
@@ -36,11 +44,7 @@ void print_splash() {
   LogWarn("         |___/                          \n");
 }
 
-void draw_task_bar() {
-  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
-  gfx2d_fill_rect(context, 0, 0, 1024, 48, FLUENT_PRIMARY_COLOR);
-  gfx2d_draw_logo(context, 8, 8, 0xFFFFFF);
-}
+extern uint32_t open(const char *name, uint32_t flags, uint32_t mode);
 
 uint32_t *window_thread1(int args) {
   uint32_t count = 0;
@@ -48,21 +52,30 @@ uint32_t *window_thread1(int args) {
   gui_window_create(&window);
   window.component.size.width = 300;
   window.component.size.height = 200;
-  gui_window_init(&window, 20, 70, "window1");
+  gui_window_init(&window, 100, 100, "window1");
   GUILabel label;
   gui_label_create(&label);
   label.component.colorMode = TRANSPARENT;
   label.component.size.width = 100;
   gui_window_add_children(&window, &(label.component));
+  uint32_t fd = open("/initrd/bin/bin.txt", 1, 3);
+
+  char *buffer = (char *)kheap_alloc(4);
+  uint32_t size = vfs_kernel_read(vfs, "/initrd/bin/bin.txt", buffer, 3);
+  buffer[3] = '\0';
   while (1) {
     char str[10] = {'\0'};
     gui_label_init(&label, 0, 0, itoa(count, &str, 10));
     disable_interrupt();
+    LogWarn("[Thread3] fd: %d .\n", fd);
+    LogWarn("[Thread3] data: %s .\n", buffer);
     gui_window_draw(&window);
     enable_interrupt();
     count += 2;
   }
 }
+
+extern uint32_t getpid();
 
 uint32_t *window_thread2(int args) {
   uint32_t count = 0;
@@ -70,23 +83,24 @@ uint32_t *window_thread2(int args) {
   gui_window_create(&window);
   window.component.size.width = 300;
   window.component.size.height = 200;
-  gui_window_init(&window, 340, 70, "window2");
+  gui_window_init(&window, 500, 100, "window2");
   GUILabel label;
   gui_label_create(&label);
-  label.component.colorMode = TRANSPARENT;
   label.component.size.width = 100;
+  label.component.colorMode = TRANSPARENT;
   gui_window_add_children(&window, &(label.component));
   while (1) {
     char str[10] = {'\0'};
     gui_label_init(&label, 0, 0, itoa(count, &str, 10));
     disable_interrupt();
+    uint32_t pid = getpid();
+    LogWarn("[Thread3] pid: %d .\n", pid);
     gui_window_draw(&window);
     enable_interrupt();
     count++;
   }
 }
 
-extern uint32_t getpid();
 uint32_t *window_thread3(int args) {
   GUIWindow window;
   gui_window_create(&window);
@@ -106,8 +120,6 @@ uint32_t *window_thread3(int args) {
     gui_animation_update(&translation);
     disable_interrupt();
     gui_window_draw(&window);
-    uint32_t pid = getpid();
-    LogWarn("[Thread3] pid: %d .\n", pid);
     enable_interrupt();
   }
 }
@@ -149,30 +161,73 @@ uint32_t *window_thread5(int args) {
   }
 }
 
+uint32_t *gpu(int args) {
+  while (1) {
+    disable_interrupt();
+    gpu_flush(0);
+    enable_interrupt();
+  }
+}
+
+void initProcessUpdate(uint32_t process) {
+  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
+  gfx2d_fill_rect(context, 120, 520, 120 + process * (((1024 - 240) / 100) + 1), 530, 0xf25a29);
+
+  gfx2d_fill_rect(context, 120 - 10, 540, 1024 - 120, 570, 0x171520);
+  GUILabel label;
+  gui_label_create(&label);
+  char str[10] = {'\0'};
+  gui_label_init(&label, 120 + process * (((1024 - 240) / 100) + 1) - 8, 550, itoa(process, &str, 10));
+  GUILabel labelPercent;
+  gui_label_create(&labelPercent);
+  gui_label_init(&labelPercent, 120 + process * (((1024 - 240) / 100) + 1) + 8, 550, "%");
+  gui_label_draw(&label);
+  gui_label_draw(&labelPercent);
+  gpu_flush(1);
+}
+
 TimerHandler gpuHandler;
 SpinLock bootSpinLock = SpinLockCreate();
+
 void kernel_main(void) {
   if (read_cpuid() == 0) {
     bootSpinLock.operations.acquire(&bootSpinLock);
     init_bsp();
     print_splash();
 
-    vmm_init();
     kheap_init();
-    init_interrupt();
     gpu_init();
 
+    vmm_add_map_hook(initProcessUpdate);
+
     Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
+    gfx2d_fill_rect(context, 0, 0, 1024, 768, 0x171520);
+    gfx2d_fill_rect(context, 120, 520, 1024 - 120, 530, 0xf7941d);
+    gfx2d_draw_bitmap(context, 384, 150, 256, 256, bootLogo());
+
+    GUILabel label;
+    gui_label_create(&label);
+    label.component.colorMode = RGB;
+    label.component.size.width = 100;
+    gui_label_init(&label, 120, 500, "Booting...");
+    gui_label_draw(&label);
+
+    GUILabel labelCopyright;
+    gui_label_create(&labelCopyright);
+    gui_label_init(&labelCopyright, 450, 720, "@ZionLab 2020");
+    gui_label_draw(&labelCopyright);
+
+    vmm_init();
+    init_interrupt();
+    kheap_init();
+
     gfx2d_draw_bitmap(context, 0, 0, 1024, 768, desktop());
-    draw_task_bar();
+    gfx2d_fill_rect(context, 0, 0, 1024, 48, 0xd3d3d3);
 
-    gpuHandler.node.next = nullptr;
-    gpuHandler.node.prev = nullptr;
-    gpuHandler.timer_interrupt_handler = &gpu_flush;
-    register_time_interrupt(&gpuHandler);
-
-    vfs_init();
     schd_init();
+
+    vfs = vfs_create();
+    vfs->operations.mount(vfs, "root", FILESYSTEM_EXT2, (void *)EXT2_ADDRESS);
 
     Thread *window1Thread = thread_create("window1", &window_thread1, 1, 1);
     schd_add_thread(window1Thread, 1);
@@ -186,15 +241,18 @@ void kernel_main(void) {
     Thread *window5Thread = thread_create("window5", &window_thread5, 1, 5);
     schd_add_thread(window5Thread, 5);
 
-    Thread *window2Thread = thread_create("window2", &window_thread2, 1, 2);
-    schd_add_thread(window2Thread, 1);
+    Thread *window2Thread = thread_create("window2", &window_thread2, 1, 0);
+    schd_add_thread(window2Thread, 0);
 
+    Thread *gpuProcess = thread_create("gpu", &gpu, 1, 0);
+    schd_add_thread(gpuProcess, 0);
+
+    //    gpuHandler.node.next = nullptr;
+    //    gpuHandler.node.prev = nullptr;
+    //    gpuHandler.timer_interrupt_handler = &gpu_flush;
+    //    register_time_interrupt(&gpuHandler);
     bootSpinLock.operations.release(&bootSpinLock);
     schd_schedule();
-  }
-
-  if (read_cpuid() == 1) {
-    led_init();
   }
 
   // schd_switch_next();
