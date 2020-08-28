@@ -13,9 +13,11 @@ uint8_t *lfb;
 uint32_t framebufferWidth;
 uint32_t framebufferHeight;
 
+extern Heap kernelHeap;
+
 uint32_t framebuffer_init(void) {
   PropertySetPhysicalDisplayWHMail *setPhysicalDisplayWHMail =
-      kheap_alloc_aligned(sizeof(PropertySetPhysicalDisplayWHMail), 16);
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertySetPhysicalDisplayWHMail), 16);
   setPhysicalDisplayWHMail->size = sizeof(PropertySetPhysicalDisplayWHMail);
   setPhysicalDisplayWHMail->code = CODE_REQUEST;
   setPhysicalDisplayWHMail->end = PROPERTY_TAG_END;
@@ -33,7 +35,7 @@ uint32_t framebuffer_init(void) {
   }
 
   PropertySetVirtualBufferWHMail *setVirtualBufferWHMail =
-      kheap_alloc_aligned(sizeof(PropertySetVirtualBufferWHMail), 16);
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertySetVirtualBufferWHMail), 16);
   setVirtualBufferWHMail->size = sizeof(PropertySetVirtualBufferWHMail);
   setVirtualBufferWHMail->code = CODE_REQUEST;
   setVirtualBufferWHMail->end = PROPERTY_TAG_END;
@@ -50,7 +52,8 @@ uint32_t framebuffer_init(void) {
     LogError("[Framebuffer]: Unable to set virtual WH\n");
   }
 
-  PropertySetDepthMail *setDepthMail = kheap_alloc_aligned(sizeof(PropertySetDepthMail), 16);
+  PropertySetDepthMail *setDepthMail =
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertySetDepthMail), 16);
   setDepthMail->size = sizeof(PropertySetDepthMail);
   setDepthMail->code = CODE_REQUEST;
   setDepthMail->end = PROPERTY_TAG_END;
@@ -64,7 +67,8 @@ uint32_t framebuffer_init(void) {
     LogError("[Framebuffer]: Unable to set depth\n");
   }
 
-  PropertySetVirtualOffsetMail *setVirtualOffsetMail = kheap_alloc_aligned(sizeof(PropertySetVirtualOffsetMail), 16);
+  PropertySetVirtualOffsetMail *setVirtualOffsetMail =
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertySetVirtualOffsetMail), 16);
   setVirtualOffsetMail->size = sizeof(PropertySetVirtualOffsetMail);
   setVirtualOffsetMail->code = CODE_REQUEST;
   setVirtualOffsetMail->end = PROPERTY_TAG_END;
@@ -81,7 +85,8 @@ uint32_t framebuffer_init(void) {
     LogError("[Framebuffer]: Unable to set virtual offset\n");
   }
 
-  PropertyAllocateBufferMail *allocateBufferMail = kheap_alloc_aligned(sizeof(PropertyAllocateBufferMail), 16);
+  PropertyAllocateBufferMail *allocateBufferMail =
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertyAllocateBufferMail), 16);
   allocateBufferMail->size = sizeof(PropertyAllocateBufferMail);
   allocateBufferMail->code = CODE_REQUEST;
   allocateBufferMail->end = PROPERTY_TAG_END;
@@ -96,7 +101,8 @@ uint32_t framebuffer_init(void) {
     LogError("[Framebuffer]: Unable to allocate video buffer\n");
   }
 
-  PropertyGetPitchMail *getPitchMail = kheap_alloc_aligned(sizeof(PropertyGetPitchMail), 16);
+  PropertyGetPitchMail *getPitchMail =
+      kernelHeap.operations.allocAligned(&kernelHeap, sizeof(PropertyGetPitchMail), 16);
   getPitchMail->size = sizeof(PropertyGetPitchMail);
   getPitchMail->code = CODE_REQUEST;
   getPitchMail->end = PROPERTY_TAG_END;

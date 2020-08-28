@@ -2,6 +2,7 @@
 #include <log.h>
 #include <stdlib.h>
 #include <timer.h>
+#include <vmm.h>
 
 static rpi_irq_controller_t *rpiIRQController = (rpi_irq_controller_t *)RPI_INTERRUPT_CONTROLLER_BASE;
 
@@ -68,7 +69,21 @@ int software_interrupt_handler() {
 
 void __attribute__((interrupt("ABORT"))) prefetch_abort_handler(void) {}
 
-void __attribute__((interrupt("ABORT"))) data_abort_handler(void) {}
+void data_abort_handler() {
+  volatile uint32_t r0, r1, r2, r3, r4, r5;
+  __asm__ volatile("mov %0,r0\n\t"
+                   "mov %1,r1\n\t"
+                   "mov %2,r2\n\t"
+                   "mov %3,r3\n\t"
+                   "mov %4,r4\n\t"
+                   "mov %5,r5\n\t"
+                   : "=r"(r0), "=r"(r1), "=r"(r2), "=r"(r3), "=r"(r4), "=r"(r5)
+                   :
+                   : "r0", "r1", "r2", "r3", "r4", "r5");
+
+  LogError("[Interrupt]: data abort\n");
+  do_page_fault(r3);
+}
 
 void unused_handler(void) {}
 

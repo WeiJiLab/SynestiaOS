@@ -1,4 +1,5 @@
 #include <cache.h>
+#include <elf.h>
 #include <ext2.h>
 #include <font8bits.h>
 #include <gfx2d.h>
@@ -12,9 +13,11 @@
 #include <gui_view3d.h>
 #include <gui_window.h>
 #include <interrupt.h>
+#include <kernel_vmm.h>
 #include <kheap.h>
 #include <log.h>
 #include <mutex.h>
+#include <page.h>
 #include <sched.h>
 #include <spinlock.h>
 #include <stdlib.h>
@@ -23,11 +26,15 @@
 #include <vfs.h>
 #include <vmm.h>
 
+extern uint32_t __HEAP_BEGIN;
 extern char _binary_initrd_img_start[];
 extern char _binary_initrd_img_end[];
 extern char _binary_initrd_img_size[];
 uint32_t EXT2_ADDRESS = _binary_initrd_img_start;
+
 VFS *vfs;
+Heap kernelHeap;
+PhysicalPageAllocator kernelPageAllocator;
 
 extern uint32_t *gpu_flush(int args);
 
@@ -50,17 +57,16 @@ uint32_t *window_thread1(int args) {
   uint32_t count = 0;
   GUIWindow window;
   gui_window_create(&window);
-  window.component.size.width = 300;
+  window.component.size.width = 340;
   window.component.size.height = 200;
-  gui_window_init(&window, 100, 100, "window1");
+  gui_window_init(&window, 20, 20, "window1");
   GUILabel label;
   gui_label_create(&label);
   label.component.colorMode = TRANSPARENT;
   label.component.size.width = 100;
   gui_window_add_children(&window, &(label.component));
   uint32_t fd = open("/initrd/bin/bin.txt", 1, 3);
-
-  char *buffer = (char *)kheap_alloc(4);
+  char *buffer = (char *)kernelHeap.operations.alloc(&kernelHeap, 4);
   uint32_t size = vfs_kernel_read(vfs, "/initrd/bin/bin.txt", buffer, 3);
   buffer[3] = '\0';
   while (1) {
@@ -81,9 +87,9 @@ uint32_t *window_thread2(int args) {
   uint32_t count = 0;
   GUIWindow window;
   gui_window_create(&window);
-  window.component.size.width = 300;
+  window.component.size.width = 340;
   window.component.size.height = 200;
-  gui_window_init(&window, 500, 100, "window2");
+  gui_window_init(&window, 380, 20, "window2");
   GUILabel label;
   gui_label_create(&label);
   label.component.size.width = 100;
@@ -98,6 +104,49 @@ uint32_t *window_thread2(int args) {
     gui_window_draw(&window);
     enable_interrupt();
     count++;
+  }
+}
+
+uint32_t *window_filesystem(int args) {
+  GUIWindow window;
+  gui_window_create(&window);
+  window.component.size.width = 340;
+  window.component.size.height = 200;
+  gui_window_init(&window, 20, 300, "FileManager");
+  DirectoryEntry *directoryEntry = vfs->operations.lookup(vfs, "/initrd");
+  struct GUILabel *labels;
+  uint32_t size = 0;
+  disable_interrupt();
+  if (directoryEntry->children != nullptr) {
+    size = klist_size(&directoryEntry->children->list);
+    labels = kernelHeap.operations.alloc(&kernelHeap, size * sizeof(GUILabel));
+    struct DirectoryEntry *pEntry = directoryEntry->children;
+    uint32_t y = 0;
+    for (uint32_t i = 1; i < size; i++) {
+      gui_label_create(&labels[i]);
+      gui_label_init(&labels[i], (i % 4) * 80, y * 20, pEntry->fileName);
+      labels[i].component.colorMode = TRANSPARENT;
+      gui_window_add_children(&window, &(labels[i].component));
+      pEntry = getNode(pEntry->list.prev, DirectoryEntry, list);
+      if (i % 4 == 0) {
+        y++;
+      }
+    }
+  }
+  enable_interrupt();
+
+  while (1) {
+    disable_interrupt();
+    uint32_t y = 0;
+    for (uint32_t i = 1; i < size; i++) {
+      labels[i].component.position.x = (i % 4) * 80;
+      labels[i].component.position.y = y * 20;
+      if (i % 4 == 0) {
+        y++;
+      }
+    }
+    gui_window_draw(&window);
+    enable_interrupt();
   }
 }
 
@@ -161,6 +210,42 @@ uint32_t *window_thread5(int args) {
   }
 }
 
+uint32_t *window_clock(int args) {
+  uint32_t count = 0;
+  GUIWindow window;
+  gui_window_create(&window);
+  window.component.size.width = 340;
+  window.component.size.height = 200;
+  gui_window_init(&window, 380, 300, "Clock");
+  GUICanvas canvas;
+  gui_canvas_create(&canvas);
+  gui_canvas_init(&canvas, 0, 0);
+  canvas.component.size.width = 320;
+  canvas.component.size.height = 180;
+  gui_window_add_children(&window, &(canvas.component));
+
+  gui_canvas_fill_circle(&canvas, 160, 90, 80, 0xAAAAAA);
+  gui_canvas_fill_circle(&canvas, 160, 90, 70, 0xFFFFFF);
+  gui_canvas_fill_rect(&canvas, 160, 87, 250, 93, 0xAAAAAA);
+  gui_canvas_fill_circle(&canvas, 160, 90, 20, 0xAAAAAA);
+  gui_canvas_fill_rect(&canvas, 156, 90, 164, 150, 0x777777);
+  gui_canvas_fill_circle(&canvas, 160, 90, 10, 0x777777);
+
+  char *buffer = (char *)kernelHeap.operations.alloc(&kernelHeap, 34972);
+  uint32_t size = vfs_kernel_read(vfs, "/initrd/bin/TestApp.elf", buffer, 34972);
+  Elf elf;
+  KernelStatus elfStatus = elf_init(&elf, buffer);
+  if (elfStatus != OK) {
+    LogError("[Elf]: load failed.\n");
+  }
+  elf.operations.parse(&elf);
+  while (1) {
+    disable_interrupt();
+    gui_window_draw(&window);
+    enable_interrupt();
+  }
+}
+
 uint32_t *gpu(int args) {
   while (1) {
     disable_interrupt();
@@ -189,45 +274,61 @@ void initProcessUpdate(uint32_t process) {
 TimerHandler gpuHandler;
 SpinLock bootSpinLock = SpinLockCreate();
 
+Gfx2DContext renderBootScreen() {
+  heap_create(&kernelHeap, &__HEAP_BEGIN, 64 * MB);
+  gpu_init();
+
+  kernel_vmm_add_map_hook(initProcessUpdate);
+
+  Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
+  gfx2d_fill_rect(context, 0, 0, 1024, 768, 0x171520);
+  gfx2d_fill_rect(context, 120, 520, 1024 - 120, 530, 0xf7941d);
+  gfx2d_draw_bitmap(context, 384, 150, 256, 256, bootLogo());
+
+  GUILabel label;
+  gui_label_create(&label);
+  label.component.colorMode = RGB;
+  label.component.size.width = 100;
+  gui_label_init(&label, 120, 500, "Booting...");
+  gui_label_draw(&label);
+
+  GUILabel labelCopyright;
+  gui_label_create(&labelCopyright);
+  gui_label_init(&labelCopyright, 450, 720, "@ZionLab 2020");
+  gui_label_draw(&labelCopyright);
+  return context;
+}
+
 void kernel_main(void) {
   if (read_cpuid() == 0) {
     bootSpinLock.operations.acquire(&bootSpinLock);
     init_bsp();
     print_splash();
 
-    kheap_init();
-    gpu_init();
+    // create kernel physical page allocator
+    page_allocator_create(&kernelPageAllocator, KERNEL_PHYSICAL_START, KERNEL_PHYSICAL_SIZE);
 
-    vmm_add_map_hook(initProcessUpdate);
+    Gfx2DContext context = renderBootScreen();
 
-    Gfx2DContext context = {.width = 1024, .height = 768, .buffer = GFX2D_BUFFER};
-    gfx2d_fill_rect(context, 0, 0, 1024, 768, 0x171520);
-    gfx2d_fill_rect(context, 120, 520, 1024 - 120, 530, 0xf7941d);
-    gfx2d_draw_bitmap(context, 384, 150, 256, 256, bootLogo());
+    kernel_vmm_init();
 
-    GUILabel label;
-    gui_label_create(&label);
-    label.component.colorMode = RGB;
-    label.component.size.width = 100;
-    gui_label_init(&label, 120, 500, "Booting...");
-    gui_label_draw(&label);
-
-    GUILabel labelCopyright;
-    gui_label_create(&labelCopyright);
-    gui_label_init(&labelCopyright, 450, 720, "@ZionLab 2020");
-    gui_label_draw(&labelCopyright);
-
-    vmm_init();
     init_interrupt();
-    kheap_init();
 
-    gfx2d_draw_bitmap(context, 0, 0, 1024, 768, desktop());
-    gfx2d_fill_rect(context, 0, 0, 1024, 48, 0xd3d3d3);
+    // create kernel heap
+    heap_create(&kernelHeap, &__HEAP_BEGIN, KERNEL_PHYSICAL_SIZE - (uint32_t)(&__HEAP_BEGIN));
 
-    schd_init();
+    // TODO: it'a test to trigger page fault
+    uint32_t i = *(uint32_t *)(0xFFee0f3e);
 
     vfs = vfs_create();
     vfs->operations.mount(vfs, "root", FILESYSTEM_EXT2, (void *)EXT2_ADDRESS);
+
+    uint32_t *background = (uint32_t *)kernelHeap.operations.alloc(&kernelHeap, 768 * 1024 * 4);
+    uint32_t size = vfs_kernel_read(vfs, "/initrd/init/bg1024_768.dat", background, 768 * 1024 * 4);
+    gfx2d_draw_bitmap(context, 0, 0, 1024, 768, background);
+    kernelHeap.operations.free(&kernelHeap, background);
+
+    schd_init();
 
     Thread *window1Thread = thread_create("window1", &window_thread1, 1, 1);
     schd_add_thread(window1Thread, 1);
@@ -244,13 +345,15 @@ void kernel_main(void) {
     Thread *window2Thread = thread_create("window2", &window_thread2, 1, 0);
     schd_add_thread(window2Thread, 0);
 
+    Thread *windowFileSystemThread = thread_create("window fs", &window_filesystem, 1, 0);
+    schd_add_thread(windowFileSystemThread, 0);
+
+    Thread *windowMandelbrotThread = thread_create("window fs", &window_clock, 1, 0);
+    schd_add_thread(windowMandelbrotThread, 0);
+
     Thread *gpuProcess = thread_create("gpu", &gpu, 1, 0);
     schd_add_thread(gpuProcess, 0);
 
-    //    gpuHandler.node.next = nullptr;
-    //    gpuHandler.node.prev = nullptr;
-    //    gpuHandler.timer_interrupt_handler = &gpu_flush;
-    //    register_time_interrupt(&gpuHandler);
     bootSpinLock.operations.release(&bootSpinLock);
     schd_schedule();
   }

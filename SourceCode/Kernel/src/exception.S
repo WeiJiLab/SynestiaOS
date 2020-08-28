@@ -14,19 +14,19 @@ _reset_addr:
 _undefined_instruction_addr:
     .word undefined_instruction_handler
 _software_interrupt_addr:
-    .word software_insterupt_isp
+    .word software_interrupt_isp
 _prefetch_abort_addr:
     .word prefetch_abort_handler
 _data_abort_addr:
-    .word data_abort_handler
+    .word data_abort_isp
 _unused_addr:
     .word unused_handler
 _interrupt_addr:
-    .word interupt_isp
+    .word interrupt_isp
 _fast_interrupt_addr:
     .word fast_interrupt_handler
 
-reset_handler: 
+reset_handler:
     mrc p15, #0, r0, c0, c0, #5 // Move to ARM Register r0 from Coprocessor c0. Read ID Code Register
     and r0, r0, #3 // r0 &= 0x3
     cmp r0, #0 // check whether r0==0
@@ -113,28 +113,36 @@ _reset_cpu3:
 .global  switch_to_signal;
 
 halt_cpu:
-    wfi // wait for interrup coming
+    wfi // wait for interrupt coming
     b halt_cpu
 
-software_insterupt_isp:
+software_interrupt_isp:
     //cpsr
     stmfd   sp!, {r1-r12,lr}
-    
+
     bl software_interrupt_handler
 
     ldmfd   sp!, {r1-r12,lr}
     subs    pc,  lr, #0
     nop
 
+data_abort_isp:
+    //cpsr
+    stmfd   sp!, {r1-r12,lr}
 
+	bl    data_abort_handler
 
-interupt_isp:
+	ldmfd   sp!, {r1-r12,lr}
+    subs    pc,  lr, #0
+    nop
+
+interrupt_isp:
     //cpsr
     stmfd   sp!, {r0-r12,lr}
 
     bl interrupt_handler
 
-    //R0: swithch_to_signal Address
+    //R0: switch_to_signal Address
     ldr r0, =switch_to_signal
     ldr r1, [r0]
 

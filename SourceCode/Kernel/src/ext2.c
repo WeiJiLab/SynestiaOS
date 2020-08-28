@@ -11,6 +11,8 @@
 #include <vfs_dentry.h>
 #include <vfs_inode.h>
 
+extern Heap kernelHeap;
+
 #define EXT2_SIGNATURE 0xef53
 #define EXT2_BLOCK_GROUP_DESCRIPTOR_SIZE 32
 #define EXT2_INDEX_NODE_STRUCTURE_SIZE 128
@@ -32,26 +34,23 @@ void ext2_recursively_fill_superblock(Ext2FileSystem *ext2FileSystem, Ext2IndexN
 
     directoryEntry->operations.initOperation(directoryEntry, vfsDirectoryEntry, indexNode);
 
-    directoryEntry->fileName = name;
     // atomic_set(&directoryEntry->refCount,1);
     directoryEntry->operations.hashOperation(directoryEntry);
     directoryEntry->indexNode->type = INDEX_NODE_DIRECTORY;
 
-    // inode is a empty directory
-    if (ext2IndexNode->hardLinksCount == 1) {
-      // just return
-      return;
-    }
-
     Ext2DirectoryEntry *dEntry = (Ext2DirectoryEntry *)((uint32_t)ext2FileSystem->data +
                                                         ext2IndexNode->directBlockPointer0 * ext2FileSystem->blockSize);
 
-    while (*(uint32_t *)((uint32_t)dEntry + dEntry->sizeOfThisEntry) != 0) {
+    while (*(uint32_t *)((uint32_t)dEntry) != 0) {
       if (strcmp(dEntry->nameCharacters, "..") || strcmp(dEntry->nameCharacters, ".") ||
           strcmp(dEntry->nameCharacters, "lost+found")) {
         // TODO: lost+found
         // ignore
-        dEntry = (Ext2DirectoryEntry *)((uint32_t)dEntry + dEntry->sizeOfThisEntry);
+
+        uint32_t dEntryNameAlignment = dEntry->nameLength / 4;
+        dEntryNameAlignment = dEntryNameAlignment * 4 + (dEntry->nameLength % 4 > 0 ? 4 : 0);
+        uint32_t nextDEntryAddr = dEntry->nameCharacters + dEntryNameAlignment;
+        dEntry = (Ext2DirectoryEntry *)(nextDEntryAddr);
         continue;
       }
       // inode is directory , it's means should recursion
@@ -61,8 +60,17 @@ void ext2_recursively_fill_superblock(Ext2FileSystem *ext2FileSystem, Ext2IndexN
                                                   (((uint32_t)dEntry->indexNode - 1) %
                                                    ext2FileSystem->ext2SuperBlock->eachBlockGroupIndexNodeNums) *
                                                       EXT2_INDEX_NODE_STRUCTURE_SIZE);
-      ext2_recursively_fill_superblock(ext2FileSystem, nextNode, directoryEntry, dEntry->nameCharacters);
-      dEntry = (Ext2DirectoryEntry *)((uint32_t)dEntry + dEntry->sizeOfThisEntry);
+      char name[0xFF] = {'\0'};
+      for (uint32_t i = 0; i < dEntry->nameLength; i++) {
+        name[i] = dEntry->nameCharacters[i];
+      }
+      ext2_recursively_fill_superblock(ext2FileSystem, nextNode, directoryEntry, name);
+
+      uint32_t dEntryNameAlignment = dEntry->nameLength / 4;
+      dEntryNameAlignment = dEntryNameAlignment * 4 + (dEntry->nameLength % 4 > 0 ? 4 : 0);
+      uint32_t nextDEntryAddr = dEntry->nameCharacters + dEntryNameAlignment;
+
+      dEntry = (Ext2DirectoryEntry *)(nextDEntryAddr);
     }
   } else if ((ext2IndexNode->typeAndPermissions & 0xF000) == EXT2_INDEX_NODE_TYPE_REGULAR_FILE) {
     // create vfs inode, create vfs dentry , and fill them
@@ -139,7 +147,8 @@ KernelStatus ext2_fs_default_mount(Ext2FileSystem *ext2FileSystem, char *mountNa
   blockForIndexNodeTable += blockForIndexNodeTableMod;
   LogInfo("[Ext2]: index node table  blocks: %d .\n", blockForIndexNodeTable);
 
-  Ext2BlockGroup *blockGroup = (Ext2BlockGroup *)kheap_alloc(blockGroupNums * sizeof(Ext2BlockGroup));
+  Ext2BlockGroup *blockGroup =
+      (Ext2BlockGroup *)kernelHeap.operations.alloc(&kernelHeap, blockGroupNums * sizeof(Ext2BlockGroup));
 
   for (uint32_t blockGroupDescriptorIndex = 0; blockGroupDescriptorIndex < blockGroupNums;
        blockGroupDescriptorIndex++) {
@@ -186,16 +195,111 @@ KernelStatus ext2_fs_default_mount(Ext2FileSystem *ext2FileSystem, char *mountNa
   LogInfo("[Ext2]: mounted.\n");
 }
 
-char *ext2_fs_default_read(Ext2FileSystem *ext2FileSystem, Ext2IndexNode *ext2IndexNode) {
+uint32_t ext2_get_data_block(Ext2FileSystem *ext2FileSystem, Ext2IndexNode *ext2IndexNode, uint32_t blockIndex) {
+  uint32_t directBlockMax = 12;
+  uint32_t blockPointerNumsInEachBlock = ext2FileSystem->blockSize / sizeof(uint32_t);
+  uint32_t singlyIndirectBlocksMax = directBlockMax + blockPointerNumsInEachBlock;
+  uint32_t doublyIndirectBlocksMax = directBlockMax + blockPointerNumsInEachBlock * blockPointerNumsInEachBlock;
+  uint32_t triplyIndirectBlocksMax =
+      directBlockMax + blockPointerNumsInEachBlock * blockPointerNumsInEachBlock * blockPointerNumsInEachBlock;
+
+  switch (blockIndex) {
+  case 0:
+    return ext2IndexNode->directBlockPointer0;
+  case 1:
+    return ext2IndexNode->directBlockPointer1;
+  case 2:
+    return ext2IndexNode->directBlockPointer2;
+  case 3:
+    return ext2IndexNode->directBlockPointer3;
+  case 4:
+    return ext2IndexNode->directBlockPointer4;
+  case 5:
+    return ext2IndexNode->directBlockPointer5;
+  case 6:
+    return ext2IndexNode->directBlockPointer6;
+  case 7:
+    return ext2IndexNode->directBlockPointer7;
+  case 8:
+    return ext2IndexNode->directBlockPointer8;
+  case 9:
+    return ext2IndexNode->directBlockPointer9;
+  case 10:
+    return ext2IndexNode->directBlockPointer10;
+  case 11:
+    return ext2IndexNode->directBlockPointer11;
+  default:
+    if ((blockIndex > directBlockMax - 1) && (blockIndex < singlyIndirectBlocksMax)) {
+      uint32_t singlyIndirectBlock =
+          (uint32_t)(ext2FileSystem->data + ext2IndexNode->singlyIndirectBlockPointer * ext2FileSystem->blockSize);
+
+      return ((uint32_t *)singlyIndirectBlock)[blockIndex - directBlockMax];
+    } else if ((blockIndex > singlyIndirectBlocksMax - 1) && (blockIndex < doublyIndirectBlocksMax)) {
+      uint32_t *level1DataBlock =
+          (uint32_t *)(ext2FileSystem->data + ext2IndexNode->doublyIndirectBlockPointer * ext2FileSystem->blockSize);
+      uint32_t level1Index = (blockIndex - singlyIndirectBlocksMax) / blockPointerNumsInEachBlock;
+
+      uint32_t level2DataBlockPtr = (level1DataBlock)[level1Index];
+      uint32_t level2Index = (blockIndex - singlyIndirectBlocksMax) % blockPointerNumsInEachBlock;
+
+      return ((uint32_t *)(ext2FileSystem->data + level2DataBlockPtr * ext2FileSystem->blockSize))[level2Index];
+    } else if ((blockIndex > doublyIndirectBlocksMax - 1) && (blockIndex < triplyIndirectBlocksMax)) {
+      // TODO:
+      return 0;
+    } else {
+      // over,
+      return 0;
+    }
+  }
+}
+
+void ext2_read_direct_data_block(Ext2FileSystem *ext2FileSystem, Ext2IndexNode *ext2IndexNode, char *buf,
+                                 uint32_t blockIndex) {
+  uint32_t dataBlock = ext2_get_data_block(ext2FileSystem, ext2IndexNode, blockIndex);
+
+  for (uint32_t i = 0; i < ext2FileSystem->blockSize; i++) {
+    buf[blockIndex * ext2FileSystem->blockSize + i] =
+        ((char *)(ext2FileSystem->data + dataBlock * ext2FileSystem->blockSize))[i];
+  }
+}
+
+uint32_t ext2_fs_default_read(Ext2FileSystem *ext2FileSystem, Ext2IndexNode *ext2IndexNode, char *buf, uint32_t count) {
   uint32_t fileSize = ext2IndexNode->sizeUpper32Bits << 32 | ext2IndexNode->sizeLower32Bits;
+
   uint32_t blockNeed = fileSize / ext2FileSystem->blockSize;
 
-  // TODO: read from blocks
-  return (char *)((uint32_t)ext2FileSystem->data + ext2IndexNode->directBlockPointer0 * ext2FileSystem->blockSize);
+  if (fileSize > count) {
+    // just read count bytes.
+    blockNeed = count / ext2FileSystem->blockSize;
+  } else {
+    count = fileSize;
+  }
+
+  LogInfo("[Ext2]: need %d blocks, read %d bytes.\n", blockNeed + 1, count);
+
+  uint32_t restBytes = count - blockNeed * ext2FileSystem->blockSize;
+
+  if (blockNeed == 0) {
+    for (uint32_t i = 0; i < restBytes; i++) {
+      buf[i] = ((char *)(ext2FileSystem->data + ext2IndexNode->directBlockPointer0 * ext2FileSystem->blockSize))[i];
+    }
+    return count;
+  } else {
+    for (uint32_t i = 0; i < blockNeed; i++) {
+      ext2_read_direct_data_block(ext2FileSystem, ext2IndexNode, buf, i);
+    }
+
+    for (uint32_t i = 0; i < restBytes; i++) {
+      buf[blockNeed * ext2FileSystem->blockSize + i] =
+          ((char *)(ext2FileSystem->data +
+                    ext2_get_data_block(ext2FileSystem, ext2IndexNode, blockNeed) * ext2FileSystem->blockSize))[i];
+    }
+    return count;
+  }
 }
 
 Ext2FileSystem *ext2_create() {
-  Ext2FileSystem *ext2FileSystem = (Ext2FileSystem *)kheap_alloc(sizeof(Ext2FileSystem));
+  Ext2FileSystem *ext2FileSystem = (Ext2FileSystem *)kernelHeap.operations.alloc(&kernelHeap, sizeof(Ext2FileSystem));
   ext2FileSystem->operations.mount = ext2_fs_default_mount;
   ext2FileSystem->operations.read = ext2_fs_default_read;
   return ext2FileSystem;

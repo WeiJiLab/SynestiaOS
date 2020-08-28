@@ -2,15 +2,19 @@
 // Created by XingfengYang & ChengyuZhao on 2020/7/30.
 //
 
+#include <kheap.h>
 #include <log.h>
 #include <mutex.h>
 #include <spinlock.h>
+#include <string.h>
 #include <vfs_dentry.h>
 #include <vfs_inode.h>
 #include <vfs_super_block.h>
 
-DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock *superBlock, const char *fileName) {
-  DirectoryEntry *directoryEntry = (DirectoryEntry *)kheap_alloc(sizeof(DirectoryEntry));
+extern Heap kernelHeap;
+
+DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock *superBlock, char *fileName) {
+  DirectoryEntry *directoryEntry = (DirectoryEntry *)kernelHeap.operations.alloc(&kernelHeap, sizeof(DirectoryEntry));
   if (directoryEntry == nullptr) {
     LogError("[VFS]: root dentry create failed,cause heap alloc failed.\n");
     return nullptr;
@@ -23,7 +27,7 @@ DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock
   directoryEntry->operations.releaseOperation = vfs_directory_entry_default_release;
   directoryEntry->operations.hashOperation = vfs_directory_entry_default_hash;
 
-  directoryEntry->fileName = fileName;
+  memcpy(directoryEntry->fileName, fileName, 0xFF);
   directoryEntry->fileNameHash = directoryEntry->operations.hashOperation(directoryEntry);
   directoryEntry->indexNode = nullptr;
   directoryEntry->parent = nullptr;
@@ -41,7 +45,7 @@ DirectoryEntry *vfs_super_block_default_create_directory_entry(struct SuperBlock
 }
 
 IndexNode *vfs_super_block_default_create_index_node(struct SuperBlock *superBlock, struct DirectoryEntry *dentry) {
-  IndexNode *indexNode = (IndexNode *)kheap_alloc(sizeof(IndexNode));
+  IndexNode *indexNode = (IndexNode *)kernelHeap.operations.alloc(&kernelHeap, sizeof(IndexNode));
   if (indexNode == nullptr) {
     LogError("[VFS]: root inode create failed,cause heap alloc failed.\n");
     return nullptr;
@@ -79,15 +83,15 @@ IndexNode *vfs_super_block_default_create_index_node(struct SuperBlock *superBlo
 }
 
 KernelStatus vfs_super_block_default_destroy_dentry(struct SuperBlock *superBlock, struct DirectoryEntry *dentry) {
-  return kheap_free(dentry);
+  return kernelHeap.operations.free(&kernelHeap, dentry);
 }
 
 KernelStatus vfs_super_block_default_destroy_inode(struct SuperBlock *superBlock, struct IndexNode *indexNode) {
-  return kheap_free(indexNode);
+  return kernelHeap.operations.free(&kernelHeap, indexNode);
 }
 
 SuperBlock *vfs_create_super_block() {
-  SuperBlock *superBlock = (SuperBlock *)kheap_alloc(sizeof(SuperBlock));
+  SuperBlock *superBlock = (SuperBlock *)kernelHeap.operations.alloc(&kernelHeap, sizeof(SuperBlock));
   if (superBlock == nullptr) {
     LogError("[VFS]: root fs mount failed,cause heap alloc failed.\n");
     return nullptr;

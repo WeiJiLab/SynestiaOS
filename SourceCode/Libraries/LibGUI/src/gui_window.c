@@ -11,6 +11,7 @@
 #include <gui_view3d.h>
 #include <gui_window.h>
 #include <log.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -65,6 +66,7 @@ void gui_window_create(GUIWindow *window) {
   window->header.foreground.g = (FLUENT_PRIMARY_FORE_COLOR >> 8) & 0xFF;
   window->header.foreground.b = FLUENT_PRIMARY_FORE_COLOR & 0xFF;
 
+  window->component.boxShadow.enable = false;
   window->isWindowNeedUpdate = true;
   window->isShadowNeedUpdate = true;
 
@@ -81,13 +83,6 @@ void gui_window_init(GUIWindow *window, uint32_t x, uint32_t y, const char *titl
   window->component.position.y = y;
 
   window->title = title;
-
-  char *tmp = title;
-  uint32_t length = 0;
-  while (*tmp) {
-    length++;
-    tmp++;
-  }
 }
 
 void gui_window_add_children(GUIWindow *window, GUIComponent *component) {
@@ -180,8 +175,11 @@ void gui_window_draw(GUIWindow *window) {
       }
     }
 
-    if (window->isShadowNeedUpdate) {
+    if (window->component.boxShadow.enable && window->isShadowNeedUpdate) {
+      // left
       for (uint32_t i = 1; i < window->component.boxShadow.width; i++) {
+
+        //         y=sqrt({250^{2}-({x-250})^{2}})
         uint32_t alpha = (0xff / window->component.boxShadow.width) * i + i * i;
         if (alpha > 0xFF) {
           alpha = 0xFF;
@@ -193,6 +191,7 @@ void gui_window_draw(GUIWindow *window) {
                             window->component.boxShadow.color.b | alpha << 24);
       }
 
+      // right
       for (uint32_t i = 0; i < window->component.boxShadow.width; i++) {
         uint32_t alpha = (0xff / window->component.boxShadow.width) * i + i * i;
         if (alpha > 0xFF) {
@@ -206,6 +205,7 @@ void gui_window_draw(GUIWindow *window) {
                             window->component.boxShadow.color.b | alpha << 24);
       }
 
+      // bottom
       for (uint32_t i = 0; i < window->component.boxShadow.width; i++) {
         uint32_t alpha = (0xff / window->component.boxShadow.width) * i + i * i;
         if (alpha > 0xFF) {
@@ -220,6 +220,7 @@ void gui_window_draw(GUIWindow *window) {
                             window->component.boxShadow.color.b | alpha << 24);
       }
 
+      // top
       for (uint32_t i = 1; i < window->component.boxShadow.width; i++) {
         uint32_t alpha = (0xff / window->component.boxShadow.width) * i + i * i;
         if (alpha > 0xFF) {
@@ -247,7 +248,7 @@ void gui_window_draw_children(GUIWindow *window) {
   KernelVector *children = window->children;
   if (children != nullptr) {
     for (uint32_t i = 0; i < children->index; i++) {
-      ListNode *listNode = children->node[i];
+      ListNode *listNode = kvector_get(children, i);
       GUIComponent *component = getNode(listNode, GUIComponent, node);
       switch (component->type) {
       case BUTTON: {

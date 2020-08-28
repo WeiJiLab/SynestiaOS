@@ -11,6 +11,8 @@
 #include <thread.h>
 #include <vfs_dentry.h>
 
+extern Heap kernelHeap;
+
 extern uint64_t ktimer_sys_runtime();
 
 uint32_t pidMap[2048] = {0};
@@ -65,12 +67,14 @@ KernelStatus thread_default_exit(struct Thread *thread, uint32_t returnCode) {
 }
 
 KernelStatus thread_default_kill(struct Thread *thread) {
+  thread_free_pid(thread->pid);
+  thread->stack->operations.free(thread->stack);
   // TODO:
   return OK;
 }
 
 uint32_t filestruct_default_openfile(FilesStruct *filesStruct, DirectoryEntry *directoryEntry) {
-  FileDescriptor *fileDescriptor = (FileDescriptor *)kheap_alloc(sizeof(FileDescriptor));
+  FileDescriptor *fileDescriptor = (FileDescriptor *)kernelHeap.operations.alloc(&kernelHeap, sizeof(FileDescriptor));
   fileDescriptor->directoryEntry = directoryEntry;
   fileDescriptor->node.prev = nullptr;
   fileDescriptor->node.next = nullptr;
@@ -84,31 +88,49 @@ uint32_t filestruct_default_openfile(FilesStruct *filesStruct, DirectoryEntry *d
   return filesStruct->fileDescriptorTable->index - 1;
 }
 
+Thread *thread_default_copy(Thread *thread, CloneFlags cloneFlags, uint32_t heapStart) {
+  Thread *p = thread_create(thread->name, thread->entry, thread->arg, thread->priority);
+  if (cloneFlags & CLONE_VM) {
+    // TODO
+  }
+
+  if (cloneFlags & CLONE_FILES) {
+    // TODO
+  }
+
+  if (cloneFlags & CLONE_FS) {
+    // TODO
+  }
+
+  // TODO
+  return p;
+}
+
 Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uint32_t priority) {
   // 1. allocate stack memory from kernel heap for idle task
   KernelStack *kernelStack = kstack_allocate(kernelStack);
   if (kernelStack != nullptr && kernelStack != nullptr) {
     // 1. init kernel stack
-    kstack_clear(kernelStack);
+    kernelStack->operations.clear(kernelStack);
 
-    kstack_push(kernelStack, entry);      // R15 PC
-    kstack_push(kernelStack, entry);      // R14 LR
-    kstack_push(kernelStack, 0x12121212); // R12
-    kstack_push(kernelStack, 0x11111111); // R11
-    kstack_push(kernelStack, 0x10101010); // R10
-    kstack_push(kernelStack, 0x09090909); // R09
-    kstack_push(kernelStack, 0x08080808); // R08
-    kstack_push(kernelStack, 0x07070707); // R07
-    kstack_push(kernelStack, 0x06060606); // R06
-    kstack_push(kernelStack, 0x05050505); // R05
-    kstack_push(kernelStack, 0x04040404); // R04
-    kstack_push(kernelStack, 0x03030303); // R03
-    kstack_push(kernelStack, 0x02020202); // R02
-    kstack_push(kernelStack, 0x01010101); // R01
-    kstack_push(kernelStack, arg);        // R00
-    kstack_push(kernelStack, 0x600001d3); // cpsr
+    kernelStack->operations.push(kernelStack, entry);      // R15 PC
+    kernelStack->operations.push(kernelStack, entry);      // R14 LR
+    kernelStack->operations.push(kernelStack, 0x12121212); // R12
+    kernelStack->operations.push(kernelStack, 0x11111111); // R11
+    kernelStack->operations.push(kernelStack, 0x10101010); // R10
+    kernelStack->operations.push(kernelStack, 0x09090909); // R09
+    kernelStack->operations.push(kernelStack, 0x08080808); // R08
+    kernelStack->operations.push(kernelStack, 0x07070707); // R07
+    kernelStack->operations.push(kernelStack, 0x06060606); // R06
+    kernelStack->operations.push(kernelStack, 0x05050505); // R05
+    kernelStack->operations.push(kernelStack, 0x04040404); // R04
+    kernelStack->operations.push(kernelStack, 0x03030303); // R03
+    kernelStack->operations.push(kernelStack, 0x02020202); // R02
+    kernelStack->operations.push(kernelStack, 0x01010101); // R01
+    kernelStack->operations.push(kernelStack, arg);        // R00
+    kernelStack->operations.push(kernelStack, 0x600001d3); // cpsr
 
-    Thread *thread = (Thread *)kheap_alloc(sizeof(Thread));
+    Thread *thread = (Thread *)kernelHeap.operations.alloc(&kernelHeap, sizeof(Thread));
     thread->magic = THREAD_MAGIC;
     thread->threadStatus = THREAD_INITIAL;
     thread->stack = kernelStack;
@@ -121,15 +143,15 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
     thread->runtimVirtualNs = 0;
     thread->startTime = ktimer_sys_runtime();
 
+    thread->parentThread = nullptr;
     thread->pid = thread_alloc_pid();
     strcpy(thread->name, name);
     thread->arg = arg;
 
-    thread->memoryStruct.vmmSpace.pageTableAddr = 0;
-    thread->memoryStruct.vmmSpace.codeSectionAddr = 0;
-    thread->memoryStruct.vmmSpace.roDataSectionAddr = 0;
-    thread->memoryStruct.vmmSpace.dataSectionAddr = 0;
-    thread->memoryStruct.vmmSpace.bssSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.codeSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.roDataSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.dataSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.bssSectionAddr = 0;
 
     thread->threadList.prev = nullptr;
     thread->threadList.next = nullptr;
@@ -149,6 +171,7 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
     thread->operations.join = thread_default_join;
     thread->operations.exit = thread_default_exit;
     thread->operations.kill = thread_default_kill;
+    thread->operations.copy = thread_default_copy;
 
     thread->filesStruct.operations.openFile = filestruct_default_openfile;
     thread->filesStruct.fileDescriptorTable = kvector_allocate();

@@ -5,69 +5,35 @@
 #include <kheap.h>
 #include <log.h>
 #include <page.h>
+#include <sched.h>
 #include <stdlib.h>
-
-static heap_alloc_func heapAllocFunc = nullptr;
-static heap_free_func heapFreeFunc = nullptr;
-
-HeapArea *usingListHead;
-HeapArea *freeListHead;
+#include <string.h>
 
 #define ALL_PHYSICAL_MEM_SIZE 0xFFFFFFFF
 #define ALL_KERNEL_HEAP_MEM_SIZE 96 * MB
 
-void default_heap_alloc_func(void *ptr, uint32_t size) {
+extern PhysicalPageAllocator kernelPageAllocator;
+
+void heap_default_alloc_callback(struct Heap *heap, void *ptr, uint32_t size) {
+  heap->statistics.allocatedSize += size;
   LogInfo("[Heap]: alloc %d bytes at %d.\n", size, (uint32_t)ptr);
 }
 
-void default_heap_free_func(void *ptr) {
-  HeapArea *heap = (HeapArea *)(ptr - sizeof(HeapArea));
-  LogInfo("[Heap]: free %d bytes at %d.\n", heap->size, (uint32_t)ptr);
+void heap_default_free_callback(struct Heap *heap, void *ptr) {
+  HeapArea *heapArea = (HeapArea *)(ptr - sizeof(HeapArea));
+  heap->statistics.allocatedSize -= heapArea->size;
+  LogInfo("[Heap]: free %d bytes at %d.\n", heapArea->size, (uint32_t)ptr);
 }
 
-void kheap_set_alloc_callback(heap_alloc_func callback) { heapAllocFunc = callback; }
-
-void kheap_set_free_callback(heap_free_func callback) { heapFreeFunc = callback; }
-
-KernelStatus kheap_init() {
-  kheap_set_alloc_callback(default_heap_alloc_func);
-  kheap_set_free_callback(default_heap_free_func);
-
-  uint32_t heapAddress = (uint32_t)&__HEAP_BEGIN;
-  LogInfo("[KHeap] end bss at: %d. \n", heapAddress);
-
-  // allocate physical page for kernel heap
-  uint32_t heapPhysicalPage =
-      (uint32_t)page_alloc_huge_at(USAGE_KERNEL_HEAP, (heapAddress | 4 * KB) >> VA_OFFSET, 128 * MB - heapAddress);
-  LogInfo("[KHeap] alloc heap page: %d. \n", (uint32_t)heapPhysicalPage);
-
-  heapAddress = KERNEL_PHYSICAL_START + heapPhysicalPage * PAGE_SIZE;
-  LogInfo("[KHeap] kheap at: %d. \n", heapAddress);
-
-  freeListHead = (HeapArea *)heapAddress;
-  freeListHead->size = 0;
-  freeListHead->list.prev = nullptr;
-
-  HeapArea *freeArea = (HeapArea *)(heapAddress + sizeof(HeapArea));
-  freeArea->size = (ALL_KERNEL_HEAP_MEM_SIZE - (uint32_t)(char *)heapAddress - 2 * sizeof(HeapArea)); // all memory
-  freeListHead->list.next = &freeArea->list;
-  freeArea->list.next = nullptr;
-  freeArea->list.prev = &freeListHead->list;
-
-  usingListHead = nullptr;
-
-  return OK;
-}
-
-void *kheap_alloc(uint32_t size) {
+void *heap_default_alloc(struct Heap *heap, uint32_t size) {
   uint32_t allocSize = size + sizeof(HeapArea);
 
-  if (freeListHead == nullptr) {
+  if (heap->freeListHead == nullptr) {
     LogError("[KHeap]: failed to get freeListHead.\n");
     return nullptr;
   }
 
-  HeapArea *currentFreeArea = freeListHead;
+  HeapArea *currentFreeArea = heap->freeListHead;
   while (currentFreeArea != nullptr) {
     // if the size of the free block can contain the request size and a rest HeapArea,
     // then just use it, and split a new block
@@ -91,9 +57,9 @@ void *kheap_alloc(uint32_t size) {
       currentFreeArea->list.prev = nullptr;
       currentFreeArea->list.next = nullptr;
       currentFreeArea->size = size;
-      HeapArea *usingArea = usingListHead;
+      HeapArea *usingArea = heap->usingListHead;
       if (usingArea == nullptr) {
-        usingListHead = currentFreeArea;
+        heap->usingListHead = currentFreeArea;
       } else {
         while (usingArea->list.next != nullptr) {
           usingArea = getNode(usingArea->list.next, HeapArea, list);
@@ -104,11 +70,7 @@ void *kheap_alloc(uint32_t size) {
 
       // 4. return the ptr of the using block
       void *ptr = (void *)currentFreeArea + sizeof(HeapArea);
-      if (heapFreeFunc == nullptr) {
-        default_heap_alloc_func(ptr, size);
-        return ptr;
-      }
-      heapAllocFunc(ptr, size);
+      heap->allocCallback(heap, ptr, size);
       return ptr;
     }
     currentFreeArea = getNode(currentFreeArea->list.next, HeapArea, list);
@@ -118,9 +80,9 @@ void *kheap_alloc(uint32_t size) {
   return nullptr;
 }
 
-void *kheap_alloc_aligned(uint32_t size, uint32_t alignment) {
+void *heap_default_alloc_aligned(struct Heap *heap, uint32_t size, uint32_t alignment) {
   uint32_t offset = alignment - 1 + sizeof(void *);
-  void *p1 = kheap_alloc(size + offset);
+  void *p1 = heap->operations.alloc(heap, size + offset);
   if (p1 == nullptr) {
     return nullptr;
   }
@@ -129,14 +91,16 @@ void *kheap_alloc_aligned(uint32_t size, uint32_t alignment) {
   return p2;
 }
 
-void *kheap_calloc(uint32_t num, uint32_t size) { return kheap_alloc(num * size); }
+void *heap_default_count_alloc(struct Heap *heap, uint32_t count, uint32_t size) {
+  return heap->operations.alloc(heap, count * size);
+}
 
-void *kheap_realloc(void *ptr, uint32_t size) {
+void *heap_default_realloc(struct Heap *heap, void *ptr, uint32_t size) {
   // 1. alloc new heap area
-  void *newHeapArea = kheap_alloc(size);
+  void *newHeapArea = heap->operations.alloc(heap, size);
   if (newHeapArea == nullptr) {
     LogError("[heap] alloc mem failed when realloc.\n");
-    return;
+    return nullptr;
   }
 
   // 2. copy the data from old heap area to new heap area
@@ -145,14 +109,14 @@ void *kheap_realloc(void *ptr, uint32_t size) {
   memcpy(newHeapArea, ptr, dataSize);
 
   // 3. free old heap area
-  KernelStatus freeStatus = kheap_free(ptr);
+  KernelStatus freeStatus = heap->operations.free(heap, ptr);
   if (freeStatus != OK) {
     LogError("[heap] free old mem failed when realloc.\n");
   }
   return newHeapArea;
 }
 
-KernelStatus kheap_free(void *ptr) {
+KernelStatus heap_default_free(struct Heap *heap, void *ptr) {
   // 1. get HeapArea address
   uint32_t address = (uint32_t)(ptr - sizeof(HeapArea));
   HeapArea *currentArea = (HeapArea *)address;
@@ -167,7 +131,7 @@ KernelStatus kheap_free(void *ptr) {
   }
 
   // 3. link this to free list
-  HeapArea *freeArea = freeListHead;
+  HeapArea *freeArea = heap->freeListHead;
   while (freeArea->list.next != nullptr) {
     freeArea = getNode(freeArea->list.next, HeapArea, list);
   }
@@ -176,7 +140,7 @@ KernelStatus kheap_free(void *ptr) {
   freeArea->list.next = &currentArea->list;
 
   // do some merge stuff, between two adjacent free heap area
-  HeapArea *firstFreeArea = freeListHead;
+  HeapArea *firstFreeArea = heap->freeListHead;
   while (firstFreeArea->list.next != nullptr) {
     firstFreeArea = getNode(firstFreeArea->list.next, HeapArea, list);
     HeapArea *secondFreeArea = firstFreeArea;
@@ -195,17 +159,68 @@ KernelStatus kheap_free(void *ptr) {
         secondFreeArea->list.prev = nullptr;
         secondFreeArea->list.next = nullptr;
         secondFreeArea->size = 0;
+
+        heap->statistics.mergeCounts++;
       }
     }
   }
-
-  if (heapFreeFunc == nullptr) {
-    default_heap_free_func(ptr);
-    ptr = nullptr;
-    return OK;
-  }
-
-  heapFreeFunc(ptr);
+  heap->freeCallback(heap, ptr);
   ptr = nullptr;
+  return OK;
+}
+
+void heap_default_set_alloc_callback(struct Heap *heap, HeapAllocCallback callback) { heap->allocCallback = callback; }
+
+void heap_default_set_free_callback(struct Heap *heap, HeapFreeCallback callback) { heap->freeCallback = callback; }
+
+KernelStatus heap_create(Heap *heap, uint32_t addr, uint32_t size) {
+  heap->allocCallback = heap_default_alloc_callback;
+  heap->freeCallback = heap_default_free_callback;
+
+  heap->address = addr;
+  LogInfo("[KHeap] at: %d. \n", heap->address);
+
+  PhysicalPageAllocator *physicalPageAllocator;
+  if (schd_get_current_thread() == nullptr) {
+    physicalPageAllocator = &kernelPageAllocator;
+  }
+  // allocate physical page for kernel heap
+  uint32_t heapPhysicalPage = (uint32_t)physicalPageAllocator->operations.allocHugeAt(
+      physicalPageAllocator, USAGE_KERNEL_HEAP, (heap->address | 4 * KB) >> VA_OFFSET, size - heap->address);
+  LogInfo("[KHeap] alloc heap page: %d. \n", (uint32_t)heapPhysicalPage);
+
+  heap->address = KERNEL_PHYSICAL_START + heapPhysicalPage * PAGE_SIZE;
+  LogInfo("[KHeap] kheap at: %d. \n", heap->address);
+
+  HeapArea *freeHead = (HeapArea *)heap->address;
+  freeHead->size = 0;
+  freeHead->list.prev = nullptr;
+
+  HeapArea *freeArea = (HeapArea *)(heap->address + sizeof(HeapArea));
+  freeArea->size = (ALL_KERNEL_HEAP_MEM_SIZE - (uint32_t)(char *)heap->address - 2 * sizeof(HeapArea)); // all memory
+  freeHead->list.next = &freeArea->list;
+  freeArea->list.next = nullptr;
+  freeArea->list.prev = &freeHead->list;
+
+  HeapArea *usingHead = nullptr;
+
+  heap->freeListHead = freeHead;
+  heap->usingListHead = usingHead;
+
+  heap->maxSizeLimit = size;
+  heap->operations.setFreeCallback = heap_default_set_free_callback;
+  heap->operations.setAllocCallback = heap_default_set_alloc_callback;
+
+  heap->operations.alloc = heap_default_alloc;
+  heap->operations.allocAligned = heap_default_alloc_aligned;
+  heap->operations.calloc = heap_default_count_alloc;
+  heap->operations.realloc = heap_default_realloc;
+  heap->operations.free = heap_default_free;
+
+  heap->statistics.allocatedBlockCount = 0;
+  heap->statistics.allocatedSize = 0;
+  heap->statistics.mergeCounts = 0;
+
+  LogInfo("[KHeap] kheap created. \n");
   return OK;
 }

@@ -5,12 +5,14 @@
 #ifndef __KERNEL_THREAD_H__
 #define __KERNEL_THREAD_H__
 
+#include <kheap.h>
 #include <kqueue.h>
 #include <kstack.h>
 #include <list.h>
 #include <rbtree.h>
 #include <stdint.h>
 #include <vfs_dentry.h>
+#include <vmm.h>
 
 typedef uint8_t CpuNum;
 typedef uint8_t CpuMask;
@@ -25,6 +27,12 @@ typedef uint8_t CpuMask;
 #define LOW_PRIORITY (NUM_PRIORITIES / 4)
 #define DEFAULT_PRIORITY (NUM_PRIORITIES / 2)
 #define HIGH_PRIORITY ((NUM_PRIORITIES / 4) * 3)
+
+typedef enum CloneFlags {
+  CLONE_VM = 0x1,
+  CLONE_FS = 0x1 << 1,
+  CLONE_FILES = 0x1 << 2,
+} CloneFlags;
 
 typedef enum CPU {
   CPU_0 = 0,
@@ -73,13 +81,12 @@ typedef struct CpuContextSave {
 
 typedef uint32_t (*ThreadStartRoutine)(void *arg);
 
-typedef struct VMMAssociatedSpace {
-  uint32_t pageTableAddr;
+typedef struct SectionInfo {
   uint32_t codeSectionAddr;
   uint32_t roDataSectionAddr;
   uint32_t dataSectionAddr;
   uint32_t bssSectionAddr;
-} __attribute__((packed)) VMMAssociatedSpace;
+} __attribute__((packed)) SectionInfo;
 
 typedef struct FileDescriptor {
   uint32_t pos;
@@ -102,8 +109,11 @@ typedef struct FilesStruct {
 typedef struct MemoryStructOperations {
 
 } MemoryStructOperations;
+
 typedef struct MemoryStruct {
-  VMMAssociatedSpace vmmSpace;
+  VirtualMemory virtualMemory;
+  Heap heap;
+  SectionInfo sectionInfo;
   MemoryStructOperations operations;
 } MemoryStruct;
 
@@ -121,6 +131,8 @@ typedef KernelStatus (*ThreadOperationExit)(struct Thread *thread, uint32_t retu
 
 typedef KernelStatus (*ThreadOperationKill)(struct Thread *thread);
 
+typedef struct Thread *(*ThreadOperationCopy)(struct Thread *thread, CloneFlags cloneFlags, uint32_t heapStart);
+
 typedef struct ThreadOperations {
   ThreadOperationSuspend suspend;
   ThreadOperationResume resume;
@@ -129,12 +141,14 @@ typedef struct ThreadOperations {
   ThreadOperationJoin join;
   ThreadOperationExit exit;
   ThreadOperationKill kill;
+  ThreadOperationCopy copy;
 } ThreadOperations;
 
 typedef struct Thread {
   uint32_t magic;
   CpuContextSave cpuContextSave;
 
+  struct Thread *parentThread;
   uint64_t pid;
   char name[THREAD_NAME_LENGTH];
   KernelStack *stack;

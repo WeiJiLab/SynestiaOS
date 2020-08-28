@@ -13,6 +13,8 @@
 #include <vfs_inode.h>
 #include <vfs_super_block.h>
 
+extern Heap kernelHeap;
+
 SuperBlock *vfs_default_mount(VFS *vfs, const char *name, FileSystemType type, void *data) {
   switch (type) {
   case FILESYSTEM_EXT2: {
@@ -82,9 +84,7 @@ uint32_t vfs_kernel_read(VFS *vfs, const char *name, char *buf, uint32_t count) 
   case FILESYSTEM_EXT2: {
     Ext2FileSystem *ext2FileSystem = getNode(directoryEntry->superBlock, Ext2FileSystem, superblock);
     Ext2IndexNode *ext2Node = (Ext2IndexNode *)directoryEntry->indexNode->indexNodePrivate;
-    char *data = ext2FileSystem->operations.read(ext2FileSystem, ext2Node);
-    memcpy(buf, data, count);
-    return count;
+    return ext2FileSystem->operations.read(ext2FileSystem, ext2Node, buf, count);
   }
   default:
     LogError("[VFS]: unsupported file system.\n");
@@ -244,7 +244,7 @@ DirectoryEntry *vfs_default_lookup(VFS *vfs, const char *name) {
 }
 
 VFS *vfs_create() {
-  VFS *vfs = (VFS *)kheap_alloc(sizeof(VFS));
+  VFS *vfs = (VFS *)kernelHeap.operations.alloc(&kernelHeap, sizeof(VFS));
   vfs->fileSystems = nullptr;
   vfs->operations.mount = vfs_default_mount;
   vfs->operations.open = vfs_default_open;
