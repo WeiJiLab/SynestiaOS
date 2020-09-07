@@ -16,7 +16,6 @@
 #include <kernel_vmm.h>
 #include <kheap.h>
 #include <log.h>
-#include <mutex.h>
 #include <page.h>
 #include <sched.h>
 #include <spinlock.h>
@@ -24,7 +23,6 @@
 #include <string.h>
 #include <synestia_os_hal.h>
 #include <vfs.h>
-#include <vmm.h>
 
 extern uint32_t __HEAP_BEGIN;
 extern char _binary_initrd_img_start[];
@@ -35,6 +33,7 @@ uint32_t EXT2_ADDRESS = _binary_initrd_img_start;
 VFS *vfs;
 Heap kernelHeap;
 PhysicalPageAllocator kernelPageAllocator;
+PhysicalPageAllocator userspacePageAllocator;
 
 extern uint32_t *gpu_flush(int args);
 
@@ -310,12 +309,16 @@ void kernel_main(void) {
 
     Gfx2DContext context = renderBootScreen();
 
+    // init kernel virtual memory mapping
     kernel_vmm_init();
-
-    init_interrupt();
 
     // create kernel heap
     heap_create(&kernelHeap, &__HEAP_BEGIN, KERNEL_PHYSICAL_SIZE - (uint32_t)(&__HEAP_BEGIN));
+
+    // create userspace physical page allocator
+    page_allocator_create(&userspacePageAllocator, USER_PHYSICAL_START, USER_PHYSICAL_SIZE);
+
+    init_interrupt();
 
     // TODO: it'a test to trigger page fault
     uint32_t i = *(uint32_t *)(0xFFee0f3e);

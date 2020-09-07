@@ -100,16 +100,16 @@ void gui_window_draw(GUIWindow *window) {
         gfx2d_fill_rect(context, window->component.position.x, window->component.position.y,
                         window->component.position.x + window->component.size.width,
                         window->component.position.y + window->component.size.height + DEFAULT_WINDOW_HEADER_HEIGHT,
-                        window->component.background.r << 16 | window->component.background.g << 8 |
-                            window->component.background.b);
+                        window->header.foreground.a << 24 | window->component.background.r << 16 |
+                            window->component.background.g << 8 | window->component.background.b);
       }
 
       // 2. draw header
       gfx2d_fill_rect(context, window->component.position.x, window->component.position.y,
                       window->component.position.x + window->component.size.width,
                       window->component.position.y + DEFAULT_WINDOW_HEADER_HEIGHT,
-                      window->header.background.r << 16 | window->header.background.g << 8 |
-                          window->header.background.b);
+                      window->header.foreground.a << 24 | window->header.background.r << 16 |
+                          window->header.background.g << 8 | window->header.background.b);
 
       uint16_t *bitmap = win_app_16_bits();
       for (uint32_t i = 0; i < 16; i++) {
@@ -122,8 +122,6 @@ void gui_window_draw(GUIWindow *window) {
           }
         }
       }
-
-      // draw shadow
 
       // 3. draw_font
       char *tmp = window->title;

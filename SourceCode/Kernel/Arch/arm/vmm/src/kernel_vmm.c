@@ -132,3 +132,13 @@ void kernel_vmm_enable() {
   mmu_enable();
   LogInfo("[vmm]: vmm enabled\n");
 }
+
+PageTableEntry *kernel_vmm_get_page_table() { return (PageTableEntry *)kernelVMML1PT; }
+
+void kernel_vmm_map(uint32_t virtualAddress) {
+  uint32_t l1Offset = address >> 30 & 0b11;
+  uint32_t l2Offset = address >> 21 & 0b111111111;
+  uint32_t l3Offset = address >> 12 & 0b111111111;
+  uint32_t pageOffset = address & 0xFFF;
+  // TODO: map for kernel
+}

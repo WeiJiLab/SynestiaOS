@@ -2,6 +2,7 @@
 // Created by XingfengYang on 2020/6/26.
 //
 
+#include <kernel_vmm.h>
 #include <kheap.h>
 #include <kstack.h>
 #include <kvector.h>
@@ -12,6 +13,8 @@
 #include <vfs_dentry.h>
 
 extern Heap kernelHeap;
+extern PhysicalPageAllocator kernelPageAllocator;
+extern PhysicalPageAllocator userspacePageAllocator;
 
 extern uint64_t ktimer_sys_runtime();
 
@@ -90,12 +93,33 @@ uint32_t filestruct_default_openfile(FilesStruct *filesStruct, DirectoryEntry *d
 
 Thread *thread_default_copy(Thread *thread, CloneFlags cloneFlags, uint32_t heapStart) {
   Thread *p = thread_create(thread->name, thread->entry, thread->arg, thread->priority);
+  if (p == nullptr) {
+    LogError("[Thread]: copy failed.\n");
+    return nullptr;
+  }
+
   if (cloneFlags & CLONE_VM) {
-    // TODO
+    // TODO: copy vmm struct
+  } else {
+    KernelStatus vmmCreateStatus = vmm_create(&p->memoryStruct.virtualMemory, &userspacePageAllocator);
+    if (vmmCreateStatus != OK) {
+      LogError("[Thread]: vmm create failed for thread: '%s'.\n", p->name);
+      // TODO: free thread.
+      return nullptr;
+    }
+
+    KernelStatus heapCreateStatus =
+        heap_create(&p->memoryStruct.heap, p->memoryStruct.sectionInfo.bssEndSectionAddr, 16 * MB);
+    if (heapCreateStatus != OK) {
+      LogError("[Thread]: heap create failed for thread: '%s'.\n", p->name);
+      // TODO: free thread.
+      // TODO: free vmm.
+      return nullptr;
+    }
   }
 
   if (cloneFlags & CLONE_FILES) {
-    // TODO
+    // TODO, copy file descriptor
   }
 
   if (cloneFlags & CLONE_FS) {
@@ -103,6 +127,7 @@ Thread *thread_default_copy(Thread *thread, CloneFlags cloneFlags, uint32_t heap
   }
 
   // TODO
+  p->parentThread = thread;
   return p;
 }
 
@@ -148,11 +173,6 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
     strcpy(thread->name, name);
     thread->arg = arg;
 
-    thread->memoryStruct.sectionInfo.codeSectionAddr = 0;
-    thread->memoryStruct.sectionInfo.roDataSectionAddr = 0;
-    thread->memoryStruct.sectionInfo.dataSectionAddr = 0;
-    thread->memoryStruct.sectionInfo.bssSectionAddr = 0;
-
     thread->threadList.prev = nullptr;
     thread->threadList.next = nullptr;
 
@@ -175,6 +195,15 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
 
     thread->filesStruct.operations.openFile = filestruct_default_openfile;
     thread->filesStruct.fileDescriptorTable = kvector_allocate();
+
+    thread->memoryStruct.sectionInfo.codeSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.roDataSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.dataSectionAddr = 0;
+    thread->memoryStruct.sectionInfo.bssSectionAddr = 0;
+
+    thread->memoryStruct.virtualMemory.physicalPageAllocator = &kernelPageAllocator;
+    thread->memoryStruct.virtualMemory.pageTable = kernel_vmm_get_page_table();
+    thread->memoryStruct.heap = kernelHeap;
 
     LogInfo("[Thread]: thread '%s' created.\n", name);
     return thread;
