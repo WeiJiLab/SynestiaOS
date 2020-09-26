@@ -12,17 +12,17 @@
 #define DEFAULT_WINDOW_HEIGHT 480
 
 typedef struct GUIWindowHeader {
-  Color background;
-  Color foreground;
+    Color background;
+    Color foreground;
 } GUIWindowHeader;
 typedef struct GUIWindow {
-  GUIComponent component;
-  char *title;
-  GUIWindowHeader header;
-  ListNode *children;
-  bool isWindowNeedUpdate;
-  bool isShadowNeedUpdate;
-
+    GUIComponent component;
+    char *title;
+    GUIWindowHeader header;
+    ListNode *children;
+    bool isWindowNeedUpdate;
+    bool isShadowNeedUpdate;
+    Gfx2DContext context;
 } GUIWindow;
 
 void gui_window_create(GUIWindow *window);
@@ -35,4 +35,4 @@ void gui_window_draw_children(GUIWindow *window);
 
 void gui_window_draw(GUIWindow *window);
 
-#endif //__LIBRARY_LIBGUI_WINDOW_H__
+#endif//__LIBRARY_LIBGUI_WINDOW_H__

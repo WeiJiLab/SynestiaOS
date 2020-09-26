@@ -12,8 +12,9 @@
 #define DEFAULT_PANEL_HEIGHT 200
 
 typedef struct GUIPanel {
-  GUIComponent component;
-  KernelVector *children;
+    GUIComponent component;
+    KernelVector *children;
+    Gfx2DContext context;
 } GUIPanel;
 
 void gui_panel_create(GUIPanel *panel);
@@ -26,4 +27,4 @@ void gui_panel_draw_children(GUIPanel *panel);
 
 void gui_panel_draw(GUIPanel *panel);
 
-#endif //__LIBRARY_LIBGUI_PANEL_H__
+#endif//__LIBRARY_LIBGUI_PANEL_H__

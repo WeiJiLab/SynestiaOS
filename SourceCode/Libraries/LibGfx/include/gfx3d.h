@@ -14,13 +14,13 @@
 #define GL_QUADRATIC_ATTENUATION 0
 
 typedef struct Triangle {
-  Vec3D p[3];
-  uint32_t color;
-  ListNode *node;
+    Vec3D p[3];
+    uint32_t color;
+    ListNode *node;
 } Triangle;
 
 typedef struct Mesh {
-  KernelVector tris;
+    KernelVector tris;
 } Mesh;
 
 Vec3D gfx3d_get_specular_color_shiness(Vec3D mspec, Vec3D sspec, Vec3D normal, Vec3D light, float shiness);
@@ -64,4 +64,4 @@ Vec3D gfx3d_vector_intersect_plane(Vec3D *plane_p, Vec3D *plane_n, Vec3D *lineSt
 int gfx3d_triangle_clip_against_plane(Vec3D plane_p, Vec3D plane_n, Triangle *in_tri, Triangle *out_tri1,
                                       Triangle *out_tri2);
 
-#endif //__LIBRARY_LIBGFX_GL3D_H__
+#endif//__LIBRARY_LIBGFX_GL3D_H__

@@ -4,10 +4,11 @@
 
 #ifndef __KERNEL_ATOMIC_H__
 #define __KERNEL_ATOMIC_H__
+
 #include <stdint.h>
 
 typedef struct Atomic {
-  volatile uint32_t counter;
+    volatile uint32_t counter;
 } Atomic;
 
 void atomic_create(Atomic *atomic);
@@ -24,4 +25,4 @@ uint32_t atomic_add(Atomic *atomic, uint32_t val);
 
 uint32_t atomic_sub(Atomic *atomic, uint32_t val);
 
-#endif // __KERNEL_ATOMIC_H__
+#endif// __KERNEL_ATOMIC_H__

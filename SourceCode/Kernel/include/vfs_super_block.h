@@ -15,28 +15,31 @@
 #define FILE_SYSTEM_NAME_SIZE 32
 
 typedef enum FileSystemType {
-  FILESYSTEM_FAT32,
-  FILESYSTEM_EXT2,
+    FILESYSTEM_FAT32,
+    FILESYSTEM_EXT2,
 } FileSystemType;
 
 typedef DirectoryEntry *(*SuperBlockCreateDirectoryEntry)(struct SuperBlock *superBlock, char *fileName);
+
 typedef IndexNode *(*SuperBlockCreateIndexNode)(struct SuperBlock *superBlock, struct DirectoryEntry *dentry);
+
 typedef KernelStatus (*SuperBlockDestroyDirectoryEntry)(struct SuperBlock *superBlock, struct DirectoryEntry *dentry);
+
 typedef KernelStatus (*SuperBlockDestroyIndexNode)(struct SuperBlock *superBlock, struct IndexNode *indexNode);
 
 typedef struct SuperBlockOperations {
-  SuperBlockCreateDirectoryEntry createDirectoryEntry;
-  SuperBlockCreateIndexNode createIndexNode;
-  SuperBlockDestroyDirectoryEntry destroyDirectoryEntry;
-  SuperBlockDestroyIndexNode destroyIndexNode;
+    SuperBlockCreateDirectoryEntry createDirectoryEntry;
+    SuperBlockCreateIndexNode createIndexNode;
+    SuperBlockDestroyDirectoryEntry destroyDirectoryEntry;
+    SuperBlockDestroyIndexNode destroyIndexNode;
 } SuperBlockOperations;
 
 typedef struct SuperBlock {
-  char *name;
-  FileSystemType type;
-  ListNode node;
-  struct DirectoryEntry *rootDirectoryEntry;
-  SuperBlockOperations operations;
+    char *name;
+    FileSystemType type;
+    ListNode node;
+    struct DirectoryEntry *rootDirectoryEntry;
+    SuperBlockOperations operations;
 } SuperBlock;
 
 SuperBlock *vfs_create_super_block();
@@ -49,4 +52,4 @@ KernelStatus vfs_super_block_default_destroy_dentry(struct SuperBlock *superBloc
 
 KernelStatus vfs_super_block_default_destroy_inode(struct SuperBlock *superBlock, struct IndexNode *indexNode);
 
-#endif // __KERNEL_VFS_SUPER_BLOCK_H__
+#endif// __KERNEL_VFS_SUPER_BLOCK_H__
