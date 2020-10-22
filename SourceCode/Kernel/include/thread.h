@@ -92,6 +92,11 @@ typedef struct SectionInfo {
     uint32_t bssEndSectionAddr;
 } __attribute__((packed)) SectionInfo;
 
+
+#define FD_STDIN 0
+#define FD_STDOUT 1
+#define FD_STDERR 2
+
 typedef struct FileDescriptor {
     uint32_t pos;
     DirectoryEntry *directoryEntry;
@@ -189,6 +194,8 @@ typedef struct Thread {
 } __attribute__((packed)) Thread;
 
 Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uint32_t priority);
+
+KernelStatus thread_free(Thread* thread);
 
 Thread *thread_create_idle_thread(uint32_t cpuNum);
 
