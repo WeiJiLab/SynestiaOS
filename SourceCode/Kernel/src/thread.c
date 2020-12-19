@@ -3,12 +3,14 @@
 //
 
 #include "arm/kernel_vmm.h"
+#include "kernel/kobject.h"
 #include "kernel/kheap.h"
 #include "kernel/kstack.h"
 #include "kernel/kvector.h"
 #include "kernel/log.h"
 #include "kernel/thread.h"
 #include "kernel/vfs_dentry.h"
+#include "kernel/percpu.h"
 #include "libc/stdlib.h"
 #include "libc/string.h"
 
@@ -197,6 +199,8 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
         thread->runtimeVirtualNs = 0;
         thread->startTime = ktimer_sys_runtime();
 
+        thread->cpuAffinity = CPU_MASK_ALL;
+
         thread->parentThread = nullptr;
         thread->pid = thread_alloc_pid();
         strcpy(thread->name, name);
@@ -235,7 +239,7 @@ Thread *thread_create(const char *name, ThreadStartRoutine entry, void *arg, uin
         thread->memoryStruct.virtualMemory.pageTable = kernel_vmm_get_page_table();
         thread->memoryStruct.heap = kernelHeap;
 
-        thread->object.type = THREAD;
+        thread->object.operations.init(&thread->object,KERNEL_OBJECT_THREAD,USING);
 
         LogInfo("[Thread]: thread '%s' created.\n", thread->name);
         return thread;
