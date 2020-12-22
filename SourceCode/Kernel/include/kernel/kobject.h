@@ -6,6 +6,7 @@
 #define __SYNESTIAOS_KOBJECT_H__
 
 #include "libc/stdint.h"
+#include "kernel/list.h"
 
 typedef enum KernelObjectType {
     KERNEL_OBJECT_THREAD = 0,
@@ -21,7 +22,10 @@ typedef enum KernelObjectStatus {
 } KernelObjectStatus;
 
 typedef void *(*KernelObjectOperationGetObject)(struct KernelObject *object);
-typedef void (*KernelObjectOperationInit)(struct KernelObject *object, KernelObjectType type,KernelObjectStatus status);
+
+typedef void (*KernelObjectOperationInit)(struct KernelObject *object, KernelObjectType type,
+                                          KernelObjectStatus status);
+
 typedef uint32_t (*KernelObjectOperationGetSize)(struct KernelObject *object);
 
 typedef struct KernelObjectOperations {
@@ -33,7 +37,7 @@ typedef struct KernelObjectOperations {
 typedef struct KernelObject {
     KernelObjectType type;
     KernelObjectStatus status;
-    struct KernelObject *next;
+    struct ListNode list;
     KernelObjectOperations operations;
 } KernelObject;
 
