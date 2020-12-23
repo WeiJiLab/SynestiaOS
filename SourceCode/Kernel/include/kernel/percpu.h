@@ -50,7 +50,7 @@ typedef enum CPUMask {
     CPU_15_MASK = 0x1 << 15,
 } CPUMask;
 
-#define CPU_MASK_ALL  CPU_0_MASK | CPU_1_MASK | CPU_2_MASK | CPU_3_MASK | CPU_4_MASK | CPU_5_MASK | CPU_6_MASK | CPU_7_MASK | CPU_8_MASK | CPU_9_MASK | CPU_10_MASK | CPU_11_MASK | CPU_12_MASK | CPU_13_MASK | CPU_14_MASK | CPU_15_MASK
+#define CPU_MASK_ALL CPU_0_MASK | CPU_1_MASK | CPU_2_MASK | CPU_3_MASK | CPU_4_MASK | CPU_5_MASK | CPU_6_MASK | CPU_7_MASK | CPU_8_MASK | CPU_9_MASK | CPU_10_MASK | CPU_11_MASK | CPU_12_MASK | CPU_13_MASK | CPU_14_MASK | CPU_15_MASK
 
 typedef struct CpuStatus {
     uint32_t idleTime;
@@ -76,7 +76,7 @@ typedef struct PerCpu {
     uint32_t priority;
 
     RBTree rbTree;
-    KQueue waitThreadQueue;
+    KQueueNode waitThreadQueue;
 
     Thread *idleThread;
     Thread *currentThread;
@@ -85,7 +85,7 @@ typedef struct PerCpu {
     struct ListNode node;
 
     PerCpuOperations operations;
-} __attribute__((packed)) PerCpu;
+} PerCpu;
 
 KernelStatus percpu_create(uint32_t cpuNum);
 

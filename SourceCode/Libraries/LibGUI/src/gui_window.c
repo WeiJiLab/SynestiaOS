@@ -2,17 +2,17 @@
 // Created by XingfengYang on 2020/7/7.
 //
 
+#include "libgui/gui_window.h"
 #include "kernel/log.h"
 #include "libc/stdlib.h"
 #include "libgfx/gfx2d.h"
+#include "libgfx/font8bits.h"
 #include "libgui/gui_button.h"
 #include "libgui/gui_canvas.h"
 #include "libgui/gui_container.h"
 #include "libgui/gui_label.h"
 #include "libgui/gui_panel.h"
 #include "libgui/gui_view3d.h"
-#include "libgui/gui_window.h"
-#include "libmath/math.h"
 
 extern uint32_t GFX2D_BUFFER[1024 * 768];
 
@@ -121,12 +121,13 @@ void gui_window_draw(GUIWindow *window) {
             for (uint32_t i = 0; i < 16; i++) {
                 for (uint32_t j = 0; j < 16; j++) {
                     if ((bitmap[i] & (0x1 << j)) > 0) {
-                        window->context.operations.drawPixeColor(&window->context,
-                                                                 window->component.position.x + j + DEFAULT_PADDING,
-                                                                 window->component.position.y + i + DEFAULT_PADDING + 4,
-                                                                 window->header.foreground.r << 16 |
-                                                                 window->header.foreground.g << 8 |
-                                                                 window->header.foreground.b);
+                        window->context.operations.drawPixelColor(&window->context,
+                                                                  window->component.position.x + j + DEFAULT_PADDING,
+                                                                  window->component.position.y + i + DEFAULT_PADDING +
+                                                                  4,
+                                                                  window->header.foreground.r << 16 |
+                                                                  window->header.foreground.g << 8 |
+                                                                  window->header.foreground.b);
                     }
                 }
             }
@@ -150,13 +151,14 @@ void gui_window_draw(GUIWindow *window) {
             for (uint32_t i = 0; i < 16; i++) {
                 for (uint32_t j = 0; j < 16; j++) {
                     if ((minBitmap[i] & (0x1 << j)) > 0) {
-                        window->context.operations.drawPixeColor(&window->context, window->component.position.x + j +
-                                                                                   window->component.size.width -
-                                                                                   24 * 3,
-                                                                 window->component.position.y + i + DEFAULT_PADDING + 4,
-                                                                 window->header.foreground.r << 16 |
-                                                                 window->header.foreground.g << 8 |
-                                                                 window->header.foreground.b);
+                        window->context.operations.drawPixelColor(&window->context, window->component.position.x + j +
+                                                                                    window->component.size.width -
+                                                                                    24 * 3,
+                                                                  window->component.position.y + i + DEFAULT_PADDING +
+                                                                  4,
+                                                                  window->header.foreground.r << 16 |
+                                                                  window->header.foreground.g << 8 |
+                                                                  window->header.foreground.b);
                     }
                 }
             }
@@ -165,13 +167,14 @@ void gui_window_draw(GUIWindow *window) {
             for (uint32_t i = 0; i < 16; i++) {
                 for (uint32_t j = 0; j < 16; j++) {
                     if ((maxBitmap[i] & (0x1 << j)) > 0) {
-                        window->context.operations.drawPixeColor(&window->context, window->component.position.x + j +
-                                                                                   window->component.size.width -
-                                                                                   24 * 2,
-                                                                 window->component.position.y + i + DEFAULT_PADDING + 4,
-                                                                 window->header.foreground.r << 16 |
-                                                                 window->header.foreground.g << 8 |
-                                                                 window->header.foreground.b);
+                        window->context.operations.drawPixelColor(&window->context, window->component.position.x + j +
+                                                                                    window->component.size.width -
+                                                                                    24 * 2,
+                                                                  window->component.position.y + i + DEFAULT_PADDING +
+                                                                  4,
+                                                                  window->header.foreground.r << 16 |
+                                                                  window->header.foreground.g << 8 |
+                                                                  window->header.foreground.b);
                     }
                 }
             }
@@ -180,12 +183,13 @@ void gui_window_draw(GUIWindow *window) {
             for (uint32_t i = 0; i < 16; i++) {
                 for (uint32_t j = 0; j < 16; j++) {
                     if ((closeBitmap[i] & (0x1 << j)) > 0) {
-                        window->context.operations.drawPixeColor(&window->context, window->component.position.x + j +
-                                                                                   window->component.size.width - 24,
-                                                                 window->component.position.y + i + DEFAULT_PADDING + 4,
-                                                                 window->header.foreground.r << 16 |
-                                                                 window->header.foreground.g << 8 |
-                                                                 window->header.foreground.b);
+                        window->context.operations.drawPixelColor(&window->context, window->component.position.x + j +
+                                                                                    window->component.size.width - 24,
+                                                                  window->component.position.y + i + DEFAULT_PADDING +
+                                                                  4,
+                                                                  window->header.foreground.r << 16 |
+                                                                  window->header.foreground.g << 8 |
+                                                                  window->header.foreground.b);
                     }
                 }
             }
