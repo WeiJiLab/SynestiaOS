@@ -4,7 +4,6 @@
 
 #include "kernel/vfs.h"
 #include "arm/cpu.h"
-#include "arm/mmu.h"
 #include "kernel/ext2.h"
 #include "kernel/kheap.h"
 #include "kernel/log.h"
@@ -69,8 +68,8 @@ uint32_t vfs_default_close(struct VFS *vfs, uint32_t fd) {
     PerCpu *perCpu = percpu_get(read_cpuid());
     Thread *currThread = perCpu->currentThread;
 
-    ListNode *pNode = currThread->filesStruct.fileDescriptorTable->operations.get(
-            currThread->filesStruct.fileDescriptorTable, fd);
+    ListNode *pNode = currThread->filesStruct.fileDescriptorTable.operations.get(
+            &currThread->filesStruct.fileDescriptorTable, fd);
     FileDescriptor *pDescriptor = getNode(pNode, FileDescriptor, node);
     pDescriptor->directoryEntry->indexNode->state = INDEX_NODE_STATE_CLOSED;
 
@@ -279,14 +278,13 @@ DirectoryEntry *vfs_default_lookup(VFS *vfs, const char *name) {
     return currentDirectory;
 }
 
-VFS *vfs_create() {
-    VFS *vfs = (VFS *) kernelHeap.operations.alloc(&kernelHeap, sizeof(VFS));
+VFS *vfs_create(VFS *vfs) {
     vfs->fileSystems = nullptr;
-    vfs->operations.mount = vfs_default_mount;
-    vfs->operations.open = vfs_default_open;
-    vfs->operations.close = vfs_default_close;
-    vfs->operations.read = vfs_default_read;
-    vfs->operations.write = vfs_default_write;
-    vfs->operations.lookup = vfs_default_lookup;
+    vfs->operations.mount = (VFSOperationMount) vfs_default_mount;
+    vfs->operations.open = (VFSOperationOpen) vfs_default_open;
+    vfs->operations.close = (VFSOperationClose) vfs_default_close;
+    vfs->operations.read = (VFSOperationRead) vfs_default_read;
+    vfs->operations.write = (VFSOperationWrite) vfs_default_write;
+    vfs->operations.lookup = (VFSOperationLookUp) vfs_default_lookup;
     return vfs;
 }

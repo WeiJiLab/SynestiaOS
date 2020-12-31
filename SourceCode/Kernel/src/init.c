@@ -7,7 +7,6 @@
 #include "kernel/percpu.h"
 #include "kernel/sched.h"
 #include "kernel/slab.h"
-#include "kernel/spinlock.h"
 #include "kernel/vfs.h"
 #include "libc/stdlib.h"
 #include "libgui/gui_animation.h"
@@ -17,15 +16,17 @@
 #include "libgui/gui_window.h"
 #include "raspi2/gpu.h"
 #include "raspi2/synestia_os_hal.h"
-#include <libgfx/gfx2d.h>
+#include "libgfx/gfx2d.h"
+#include "raspi2/led.h"
+#include "libc/string.h"
 
 extern uint32_t __HEAP_BEGIN;
 extern char _binary_initrd_img_start[];
 extern char _binary_initrd_img_end[];
 extern char _binary_initrd_img_size[];
-uint32_t EXT2_ADDRESS = _binary_initrd_img_start;
+uint32_t EXT2_ADDRESS = (uint32_t) _binary_initrd_img_start;
 
-VFS *vfs;
+VFS vfs;
 Heap kernelHeap;
 PhysicalPageAllocator kernelPageAllocator;
 PhysicalPageAllocator userspacePageAllocator;
@@ -51,7 +52,7 @@ extern uint32_t open(const char *name, uint32_t flags, uint32_t mode);
 
 extern uint32_t getpid();
 
-uint32_t *window_dialog(int args) {
+_Noreturn uint32_t *window_dialog(int args) {
     uint32_t count = 0;
     GUIWindow window;
     gui_window_create(&window);
@@ -62,16 +63,30 @@ uint32_t *window_dialog(int args) {
     label.component.size.width = 300;
     label.component.colorMode = TRANSPARENT;
 
+
+    GUILabel label2;
+    gui_label_create(&label2);
+    label2.component.size.width = 300;
+    label2.component.colorMode = TRANSPARENT;
+
+
     GUIButton buttonYes, buttonNo;
     gui_button_create(&buttonYes);
     gui_button_create(&buttonNo);
 
     gui_window_add_children(&window, &(label.component));
+    gui_window_add_children(&window, &(label2.component));
     gui_window_add_children(&window, &(buttonYes.component));
     gui_window_add_children(&window, &(buttonNo.component));
+    uint32_t i = 0;
+
     while (1) {
         disable_interrupt();
         gui_label_init(&label, 0, 0, "hello, world! Is this cool?");
+        char buf[32];
+        memset(buf,0,32);
+        sprintf(buf, "%d", i++);
+        gui_label_init(&label2, 80, 120, buf);
         gui_button_init(&buttonYes, 20, 50, "YES");
         gui_button_init(&buttonNo, 150, 50, "NO");
         gui_window_draw(&window);
@@ -79,12 +94,12 @@ uint32_t *window_dialog(int args) {
     }
 }
 
-uint32_t *window_filesystem(int args) {
+_Noreturn uint32_t *window_filesystem(int args) {
     GUIWindow window;
     gui_window_create(&window);
     window.component.size = SizeWH(340, 200);
     gui_window_init(&window, 380, 100, "FileManager");
-    DirectoryEntry *directoryEntry = vfs->operations.lookup(vfs, "/initrd");
+    DirectoryEntry *directoryEntry = vfs.operations.lookup(&vfs, "/initrd");
     struct GUILabel *labels;
     uint32_t size = 0;
     disable_interrupt();
@@ -122,7 +137,7 @@ uint32_t *window_filesystem(int args) {
 }
 
 
-uint32_t *window_canvas2D(int args) {
+_Noreturn uint32_t *window_canvas2D(int args) {
     GUIWindow window;
     gui_window_create(&window);
     window.component.size = SizeWH(340, 200);
@@ -142,7 +157,7 @@ uint32_t *window_canvas2D(int args) {
 }
 
 
-uint32_t *GPU_FLUSH(int args) {
+_Noreturn uint32_t *GPU_FLUSH(int args) {
     while (1) {
         disable_interrupt();
         gpu_flush(0);
@@ -150,12 +165,12 @@ uint32_t *GPU_FLUSH(int args) {
     }
 }
 
-TimerHandler gpuHandler;
 SpinLock bootSpinLock = SpinLockCreate();
 
 void kernel_main(void) {
     if (read_cpuid() == 0) {
         bootSpinLock.operations.acquire(&bootSpinLock);
+        led_init();
         init_bsp();
         print_splash();
 
@@ -166,7 +181,7 @@ void kernel_main(void) {
         kernel_vmm_init();
 
         // create kernel heap
-        heap_create(&kernelHeap, &__HEAP_BEGIN, KERNEL_PHYSICAL_SIZE - (uint32_t)(&__HEAP_BEGIN));
+        heap_create(&kernelHeap, (uint32_t) &__HEAP_BEGIN, KERNEL_PHYSICAL_SIZE - (uint32_t) (&__HEAP_BEGIN));
         slab_create(&kernelObjectSlab, 0, 0);
 
         // create userspace physical page allocator
@@ -174,14 +189,14 @@ void kernel_main(void) {
 
         init_interrupt();
 
-        vfs = vfs_create();
+        vfs_create(&vfs);
 
-        vfs->operations.mount(vfs, "root", FILESYSTEM_EXT2, (void *) EXT2_ADDRESS);
+        vfs.operations.mount(&vfs, "root", FILESYSTEM_EXT2, (void *) EXT2_ADDRESS);
 
         gpu_init();
         gfx2d_create_context(&gfx, 1024, 768, GFX2D_BUFFER);
         uint32_t *background = (uint32_t *) kernelHeap.operations.alloc(&kernelHeap, 768 * 1024 * 4);
-        vfs_kernel_read(vfs, "/initrd/init/bg1024_768.dat", background, 768 * 1024 * 4);
+        vfs_kernel_read(&vfs, "/initrd/init/bg1024_768.dat", (char *) background, 768 * 1024 * 4);
         gfx.operations.drawBitmap(&gfx, 0, 0, 1024, 768, background);
         kernelHeap.operations.free(&kernelHeap, background);
 
@@ -195,19 +210,19 @@ void kernel_main(void) {
 
         schd_init();
 
-        Thread *gpuProcess = thread_create("gpu", &GPU_FLUSH, 0, 0);
+        Thread *gpuProcess = thread_create("gpu", (ThreadStartRoutine) &GPU_FLUSH, 0, 0, svcModeCPSR());
         gpuProcess->cpuAffinity = CPU_0_MASK;
         schd_add_thread(gpuProcess, 1);
 
-        Thread *windowDialogThread = thread_create("Welcome", &window_dialog, 0, 0);
+        Thread *windowDialogThread = thread_create("Welcome", (ThreadStartRoutine) &window_dialog, 0, 0, svcModeCPSR());
         windowDialogThread->cpuAffinity = CPU_0_MASK;
         schd_add_thread(windowDialogThread, 0);
 
-        //        Thread *windowCanvas2DThread = thread_create("Canvas2D", &window_canvas2D, 0, 0);
-        //        windowCanvas2DThread->cpuAffinity = CPU_0_MASK;
-        //        schd_add_thread(windowCanvas2DThread, 0);
+//        Thread *windowCanvas2DThread = thread_create("Canvas2D", (ThreadStartRoutine) &window_canvas2D, 0, 0);
+//        windowCanvas2DThread->cpuAffinity = CPU_0_MASK;
+//        schd_add_thread(windowCanvas2DThread, 0);
 
-        Thread *windowFileSystemThread = thread_create("FileManager", &window_filesystem, 0, 0);
+        Thread *windowFileSystemThread = thread_create("FileManager", (ThreadStartRoutine) &window_filesystem, 0, 0, svcModeCPSR());
         windowFileSystemThread->cpuAffinity = CPU_0_MASK;
         schd_add_thread(windowFileSystemThread, 0);
 

@@ -4,7 +4,6 @@
 
 #include "kernel/sched.h"
 #include "arm/cpu.h"
-#include "arm/mmu.h"
 #include "kernel/interrupt.h"
 #include "kernel/log.h"
 #include "kernel/percpu.h"
@@ -56,19 +55,26 @@ uint32_t PRIORITY_2_WEIGHT[40] = {
 
 #define PRIORITY_DEFAULT_WEIGHT 1024
 
-extern uint64_t ktimer_sys_runtime_tick(uint64_t tickIntreval);
+extern uint64_t ktimer_sys_runtime_tick(uint64_t tickInterval);
+
+extern void cpu_save_context(Thread *thread, uint32_t offsetOfStack);
+
+extern void cpu_restore_context(Thread *thread, uint32_t offsetOfStack);
+
+extern void cpu_switch_mm(uint32_t pageTable);
+
 
 #define TIMER_TICK_MS 50
 
 TimerHandler tickHandler;
 
-uint32_t current_thread_stack = 0;
-uint32_t switch_thread_stack = 0;
 uint32_t switch_to_signal = 0;
 
+Thread *prevThread = nullptr;
 Thread *currentThread = nullptr;
 
 void tick() {
+    LogInfo("[Schd]: tick.\n");
     ktimer_sys_runtime_tick(TIMER_TICK_MS);
     schd_switch_next();
 }
@@ -129,7 +135,42 @@ KernelStatus schd_schedule(void) {
     tickHandler.timer_interrupt_handler = &tick;
     register_time_interrupt(&tickHandler);
     LogInfo("[Schd]: Schd started.\n");
+    enable_interrupt();
     return OK;
+}
+
+
+void schd_save_context(Thread *thread) {
+    uint32_t offsetOfStack = offsetOf(Thread, stack);
+    uint32_t offsetOfStackTop = offsetOf(KernelStack, top);
+
+    cpu_save_context(thread, offsetOfStack + offsetOfStackTop);
+}
+
+void schd_restore_context(Thread *thread) {
+    uint32_t offsetOfStack = offsetOf(Thread, stack);
+    uint32_t offsetOfStackTop = offsetOf(KernelStack, top);
+
+    cpu_restore_context(thread, offsetOfStack + offsetOfStackTop);
+}
+
+void schd_switch_mm(Thread *thread) {
+    cpu_switch_mm((uint32_t) thread->memoryStruct.virtualMemory.pageTable);
+}
+
+void schd_switch_context() {
+    int flag = switch_to_signal;
+    switch_to_signal = 0;
+    if (flag == 0) {
+        return;
+    } else if (flag == 1) {
+        schd_save_context(prevThread);
+        schd_restore_context(currentThread);
+        schd_switch_mm(currentThread);
+    } else if (flag == 2) {
+        schd_restore_context(currentThread);
+        schd_switch_mm(currentThread);
+    }
 }
 
 KernelStatus schd_switch_to(Thread *thread) {
@@ -143,14 +184,10 @@ KernelStatus schd_switch_to(Thread *thread) {
     // save current thread
     if (currentThread == nullptr) {
         switch_to_signal = 2;
-        current_thread_stack = 0;
-        // restore r0~r12
     } else {
         switch_to_signal = 1;
-        current_thread_stack = (uint32_t)(&currentThread->stack->top);
     }
-
-    switch_thread_stack = (uint32_t)(&thread->stack->top);
+    prevThread = currentThread;
     currentThread = thread;
     percpu_get(read_cpuid())->currentThread = thread;
     // pop r0~r3
