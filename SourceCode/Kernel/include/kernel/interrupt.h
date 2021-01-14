@@ -2,74 +2,70 @@
 #define __KERNEL_INTERRUPT_H__
 
 #include "libc/stdint.h"
+#include "libc/stdbool.h"
 #include "list.h"
 
-#define ARM_INTERRUPT_REGISTER_BASE 0x3F00B000
-#define RPI_INTERRUPT_CONTROLLER_BASE (ARM_INTERRUPT_REGISTER_BASE + 0x0200)
+#define INTERRUPT_NAME_LENGTH 32
 
-typedef struct {
-    volatile uint32_t IRQ_basic_pending;
-    volatile uint32_t IRQ_pending_1;
-    volatile uint32_t IRQ_pending_2;
-    volatile uint32_t FIQ_control;
-    volatile uint32_t Enable_IRQs_1;
-    volatile uint32_t Enable_IRQs_2;
-    volatile uint32_t Enable_Basic_IRQs;
-    volatile uint32_t Disable_IRQs_1;
-    volatile uint32_t Disable_IRQs_2;
-    volatile uint32_t Disable_Basic_IRQs;
-} rpi_irq_controller_t;
+typedef void (*TickHandler)(void);
 
-/**
- * get interrupt controller from memory
- * @return
- */
-rpi_irq_controller_t *getIRQController(void);
-
-/**
- * init interrupt
- */
-void init_interrupt();
-
-void swi(uint32_t num);
-
-/**
- * check interrupt status form cpsr register
- * @return
- */
-uint32_t is_interrupt_enabled();
-
-/**
- * enable interrupt with cpsie
- */
-void enable_interrupt();
-
-/**
- * disable instrrupt with cpsid
- */
-void disable_interrupt();
-
-/**
- * register interrupt
- * @param interrupt_no
- * @param interrupt_handler_f
- * @param interrupt_clear_f
- */
-void register_interrupt_handler(uint32_t interrupt_no, void (*interrupt_handler_func)(void),
-                                void (*interrupt_clear_func)(void));
-
-typedef struct TimerHandler {
-    void (*timer_interrupt_handler)(void);
-
+typedef struct Tick {
+    char name[INTERRUPT_NAME_LENGTH];
+    TickHandler handler;
     ListNode node;
-} TimerHandler;
+} Tick;
 
-/**
- * register timer interrupt handler
- * @param timer_interrupt_handler
- */
-void register_time_interrupt(TimerHandler *handler);
+Tick *tick_init(Tick *tick, TickHandler handler, const char *name);
 
-TimerHandler *timer_get_handler(void);
+typedef void (*InterruptHandler)(void);
+
+typedef void (*InterruptClearHandler)(void);
+
+typedef struct Interrupt {
+    uint32_t interruptNumber;
+    InterruptHandler handler;
+    InterruptClearHandler clearHandler;
+    char name[INTERRUPT_NAME_LENGTH];
+} Interrupt;
+
+typedef void (*InterruptManagerOperationRegisterTick)(struct InterruptManager *manager, Tick *tick);
+
+typedef void (*InterruptManagerOperationUnRegisterTick)(struct InterruptManager *manager, Tick *tick);
+
+typedef void (*InterruptManagerOperationRegister)(struct InterruptManager *manager, Interrupt interrupt);
+
+typedef void (*InterruptManagerOperationUnRegister)(struct InterruptManager *manager, Interrupt interrupt);
+
+typedef void (*InterruptManagerOperationEnableInterrupt)(struct InterruptManager *manager);
+
+typedef void (*InterruptManagerOperationDisableInterrupt)(struct InterruptManager *manager);
+
+typedef void (*InterruptManagerOperationInit)(struct InterruptManager *manager);
+
+typedef void (*InterruptManagerOperationTick)(struct InterruptManager *manager);
+
+typedef void (*InterruptManagerOperationInterrupt)(struct InterruptManager *manager);
+
+typedef struct InterruptManagerOperation {
+    InterruptManagerOperationInit init;
+    InterruptManagerOperationRegister registerInterrupt;
+    InterruptManagerOperationUnRegister unRegisterInterrupt;
+    InterruptManagerOperationRegisterTick registerTick;
+    InterruptManagerOperationUnRegisterTick unRegisterTick;
+    InterruptManagerOperationEnableInterrupt enableInterrupt;
+    InterruptManagerOperationDisableInterrupt disableInterrupt;
+    InterruptManagerOperationTick tick;
+    InterruptManagerOperationInterrupt interrupt;
+} InterruptManagerOperation;
+
+#define IRQ_NUMS 96
+typedef struct InterruptManager {
+    Interrupt interrupts[IRQ_NUMS];
+    bool registed[IRQ_NUMS];
+    Tick *ticks;
+    InterruptManagerOperation operation;
+} InterruptManager;
+
+InterruptManager *interrupt_manager_create(InterruptManager *manger);
 
 #endif// __KERNEL_INTERRUPT_H__
