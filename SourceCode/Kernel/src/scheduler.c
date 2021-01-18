@@ -2,6 +2,7 @@
 // Created by XingfengYang on 2020/6/29.
 //
 
+#include "arm/interrupt.h"
 #include "kernel/ktimer.h"
 #include "kernel/scheduler.h"
 #include "arm/register.h"

@@ -23,4 +23,5 @@ void arch_enable_interrupt();
  */
 void arch_disable_interrupt();
 
+
 #endif //SYNESTIAOS_INTERRUPT_H
