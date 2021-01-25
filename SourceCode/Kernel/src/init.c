@@ -70,6 +70,10 @@ void kernel_main(void) {
         // create interrupt manager and init generic interrupt
         interrupt_manager_create(&genericInterruptManager);
 
+        // init kernel timer manager
+        kernel_timer_manager_create(&kernelTimerManager);
+        kernelTimerManager.operation.init(&kernelTimerManager);
+
         synestia_init_timer();
 
         // create kernel physical page allocator
@@ -78,9 +82,6 @@ void kernel_main(void) {
         // init kernel virtual memory mapping
         kernel_vmm_init();
 
-        // init kernel timer manager
-        kernel_timer_manager_create(&kernelTimerManager);
-        kernelTimerManager.operation.init(&kernelTimerManager);
         scheduler_create(&cfsScheduler);
 
         // create kernel heap
@@ -118,11 +119,11 @@ void kernel_main(void) {
 
         cfsScheduler.operation.init(&cfsScheduler);
 
-        Thread *gpuProcess = thread_create("gpu", (ThreadStartRoutine) &GPU_FLUSH, 0, 0, svcModeCPSR());
+        Thread *gpuProcess = thread_create("gpu", (ThreadStartRoutine) &GPU_FLUSH, 0, 0, sysModeCPSR());
         gpuProcess->cpuAffinity = cpu_number_to_mask(0);
         cfsScheduler.operation.addThread(&cfsScheduler, gpuProcess, 1);
 
-//        test_threads_init();
+        test_threads_init();
 
         cfsScheduler.operation.schedule(&cfsScheduler);
     }

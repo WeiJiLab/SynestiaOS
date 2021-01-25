@@ -17,46 +17,10 @@ extern KernelTimerManager kernelTimerManager;
 extern Scheduler cfsScheduler;
 
 uint32_t PRIORITY_2_WEIGHT[40] = {
-        88761,
-        71755,
-        56483,
-        46273,
-        36291,
-        29154,
-        23254,
-        18705,
-        14949,
-        11916,
-        9548,
-        7620,
-        6100,
-        4904,
-        3906,
-        3121,
-        2501,
-        1991,
-        1586,
-        1277,
-        1024,
-        820,
-        655,
-        526,
-        423,
-        335,
-        272,
-        215,
-        172,
-        137,
-        110,
-        87,
-        70,
-        56,
-        45,
-        36,
-        29,
-        23,
-        18,
-        15,
+        88761, 71755, 56483, 46273, 36291, 29154, 23254, 18705, 14949, 11916,
+        9548, 7620, 6100, 4904, 3906, 3121, 2501, 1991, 1586, 1277, 1024,
+        820, 655, 526, 423, 335, 272, 215, 172, 137, 110,
+        87, 70, 56, 45, 36, 29, 23, 18, 15,
 };
 
 #define PRIORITY_DEFAULT_WEIGHT 1024
@@ -79,37 +43,8 @@ void tick() {
 
 SpinLock spinlock = SpinLockCreate();
 
-void schd_save_context(Thread *thread) {
-    uint32_t offsetOfStack = offsetOf(Thread, stack);
-    uint32_t offsetOfStackTop = offsetOf(KernelStack, top);
-
-    cpu_save_context(thread, offsetOfStack + offsetOfStackTop);
-}
-
-void schd_restore_context(Thread *thread) {
-    uint32_t offsetOfStack = offsetOf(Thread, stack);
-    uint32_t offsetOfStackTop = offsetOf(KernelStack, top);
-
-    cpu_restore_context(thread, offsetOfStack + offsetOfStackTop);
-}
-
 void schd_switch_mm(Thread *thread) {
     cpu_switch_mm((uint32_t) thread->memoryStruct.virtualMemory.pageTable);
-}
-
-void schd_switch_context() {
-    int flag = cfsScheduler.switch_to_signal;
-    cfsScheduler.switch_to_signal = 0;
-    if (flag == 0) {
-        return;
-    } else if (flag == 1) {
-        schd_save_context(cfsScheduler.prevThread);
-        schd_restore_context(cfsScheduler.currentThread);
-        schd_switch_mm(cfsScheduler.currentThread);
-    } else if (flag == 2) {
-        schd_restore_context(cfsScheduler.currentThread);
-        schd_switch_mm(cfsScheduler.currentThread);
-    }
 }
 
 KernelStatus scheduler_default_operation_init(struct Scheduler *scheduler) {
@@ -159,6 +94,23 @@ KernelStatus scheduler_default_operation_preempt(struct Scheduler *scheduler) {
     // TODO:
 }
 
+uint32_t get_curr_stack(uint32_t sp) {
+    if (nullptr != cfsScheduler.currentThread) {
+        LogInfo("to %s\n", cfsScheduler.currentThread->name);
+        return cfsScheduler.currentThread->stack.top;
+    }
+    return sp;
+}
+
+void set_curr_stack(uint32_t sp) {
+    if (nullptr != cfsScheduler.currentThread) {
+        LogInfo("from %s\n", cfsScheduler.currentThread->name);
+        cfsScheduler.currentThread->stack.top = sp;
+    } else {
+        LogInfo("from xxx\n");
+    }
+}
+
 KernelStatus scheduler_default_operation_switch_to(struct Scheduler *scheduler, Thread *thread) {
     if (thread == nullptr) {
         LogWarn("[Scheduler]: cant switch to nullptr thread.\n");
@@ -167,11 +119,6 @@ KernelStatus scheduler_default_operation_switch_to(struct Scheduler *scheduler, 
     LogInfo("[Scheduler]: switch to: %s.\n", thread->name);
 
     // save current thread
-    if (scheduler->currentThread == nullptr) {
-        scheduler->switch_to_signal = 2;
-    } else {
-        scheduler->switch_to_signal = 1;
-    }
     scheduler->prevThread = scheduler->currentThread;
     scheduler->currentThread = thread;
     percpu_get(read_cpuid())->currentThread = thread;
@@ -221,7 +168,6 @@ Scheduler *scheduler_create(Scheduler *scheduler) {
     scheduler->operation.getCurrentPid = (SchedulerOperationGetCurrentPid) scheduler_default_operation_get_current_pid;
     scheduler->operation.getCurrentThread = (SchedulerOperationGetCurrentThread) scheduler_default_operation_get_current_thread;
 
-    scheduler->switch_to_signal = 0;
     scheduler->currentThread = nullptr;
     scheduler->prevThread = nullptr;
     return scheduler;
